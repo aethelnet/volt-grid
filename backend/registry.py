@@ -111,7 +111,7 @@ DATABASE_REGISTRY = {
         "path": resolve_db_path([
             os.getenv("VOLTBASE_PATH"),
             Path(__file__).resolve().parent.parent / "data" / "voltbase.db",
-            "data/voltbase.db",
+            os.getenv("FERIZ_VOLTBASE_PATH"),
         ], default=Path(__file__).resolve().parent.parent / "data" / "voltbase.db"),
         "category": "Cyber-Physical Systems",
         "presets": [
