@@ -113,6 +113,14 @@ async function onDatabaseChange() {
         sizeBadge.textContent = `${dbInfo.size_kb} KB | WAL: ${dbInfo.wal_size_kb} KB`;
     }
 
+    // Sofortiger visueller Lade-Hinweis
+    const timeStatus = document.getElementById('query-time-status');
+    const rowStatus = document.getElementById('query-row-status');
+    const body = document.getElementById('result-body');
+    if (timeStatus) timeStatus.innerHTML = `<span class="inline-flex items-center gap-1.5 text-amber-500 font-bold"><span class="animate-spin inline-block">⟳</span> Lade DB [${escapeHtml(activeDbId)}]...</span>`;
+    if (rowStatus) rowStatus.textContent = "Initialisiere...";
+    if (body) body.innerHTML = `<tr><td colspan="100%" class="text-center py-12 font-mono-tech"><div class="inline-flex items-center space-x-2 text-[var(--text-primary)]"><span class="w-2 h-2 rounded-full bg-[var(--text-primary)] animate-ping"></span><span class="text-xs font-bold uppercase tracking-wider">Lade Tabellen &amp; Daten für [${escapeHtml(dbInfo?.name || activeDbId)}]...</span></div></td></tr>`;
+
     // Load tables
     await loadTablesForActiveDb();
 
@@ -248,8 +256,9 @@ async function executeSqlQuery() {
     const head = document.getElementById('result-head');
     const body = document.getElementById('result-body');
 
-    timeStatus.textContent = "Führe Query aus...";
-    rowStatus.textContent = "";
+    timeStatus.innerHTML = `<span class="inline-flex items-center gap-1.5 text-amber-500 font-bold"><span class="animate-spin inline-block">⟳</span> Lade Daten...</span>`;
+    rowStatus.textContent = "Warte auf SQLite-WAL...";
+    body.innerHTML = `<tr><td class="text-center py-12 font-mono-tech"><div class="inline-flex items-center space-x-2 text-[var(--text-primary)]"><span class="w-2 h-2 rounded-full bg-[var(--text-primary)] animate-ping"></span><span class="text-xs font-bold uppercase tracking-wider">Lade Datensätze aus SQLite-WAL...</span></div><div class="text-[10px] text-[var(--text-muted)] mt-1 font-mono-tech">Abfrage auf [${escapeHtml(activeDbId)}] läuft</div></td></tr>`;
 
     try {
         const res = await fetch(`/api/db/${activeDbId}/query`, {
@@ -261,6 +270,7 @@ async function executeSqlQuery() {
 
         if (!result.success) {
             timeStatus.innerHTML = `<span class="text-rose-500 font-bold">SQL Fehler</span>`;
+            rowStatus.textContent = "Abgebrochen";
             planText.textContent = "Kein Query Plan bei Fehler.";
             head.innerHTML = `<tr><th class="px-4 py-2 text-rose-500 font-bold">FEHLERSTATUS</th></tr>`;
             body.innerHTML = `<tr><td class="p-4 text-rose-500 font-mono bg-rose-500/10">${escapeHtml(result.error || result.detail)}</td></tr>`;
@@ -282,7 +292,12 @@ async function executeSqlQuery() {
 
         // Render Rows
         if (result.rows.length === 0) {
-            body.innerHTML = `<tr><td colspan="${result.columns.length}" class="text-center py-6 text-[var(--text-muted)]">0 Datensätze zurückgegeben.</td></tr>`;
+            body.innerHTML = `<tr><td colspan="${result.columns.length || 1}" class="text-center py-8 text-[var(--text-muted)] font-mono-tech">
+                <div class="space-y-1">
+                    <span class="block text-xs font-bold text-[var(--text-secondary)]">0 Datensätze zurückgegeben</span>
+                    <span class="block text-[11px] text-[var(--text-muted)]">Die Abfrage war syntaktisch gültig, lieferte jedoch keine Treffer. Wähle eine andere Relation (z. B. lgnn_nodes mit 47 Zeilen) oder ein Diagnose-Preset.</span>
+                </div>
+            </td></tr>`;
         } else {
             body.innerHTML = result.rows.map(row => `
                 <tr class="hover:bg-[var(--bg-secondary)] transition">
