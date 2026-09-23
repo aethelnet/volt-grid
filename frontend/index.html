@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="de" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOLTGRID // Cyber-Physical Dynamics & Invariant Studio</title>
+    
+    <!-- Dutch & Swiss Typography Stack: Space Grotesk + Newsreader + JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Newsreader:ital,opsz,wght@1,6..72,300;1,6..72,400;1,6..72,600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        volt: {
+                            base: 'var(--bg-primary)',
+                            sub: 'var(--bg-secondary)',
+                            card: 'var(--bg-card)',
+                            hairline: 'var(--border-hairline)',
+                            strong: 'var(--border-strong)',
+                            ink: 'var(--text-primary)',
+                            pencil: 'var(--text-secondary)',
+                            muted: 'var(--text-muted)',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        :root {
+            --bg-primary: #f8f8f6;
+            --bg-secondary: #f0f0ec;
+            --bg-card: rgba(248, 248, 246, 0.95);
+            --border-hairline: #e2e2dc;
+            --border-strong: #121212;
+            --text-primary: #121212;
+            --text-secondary: #5a5a54;
+            --text-muted: #8c8c82;
+            --ink-grid: rgba(18, 18, 18, 0.035);
+        }
+
+        .dark {
+            --bg-primary: #0a0b0d;
+            --bg-secondary: #121418;
+            --bg-card: rgba(10, 11, 13, 0.95);
+            --border-hairline: #22252c;
+            --border-strong: #e5e7eb;
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --ink-grid: rgba(243, 244, 246, 0.035);
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+            letter-spacing: -0.015em;
+            background-image: 
+                linear-gradient(to right, var(--ink-grid) 1px, transparent 1px),
+                linear-gradient(to bottom, var(--ink-grid) 1px, transparent 1px);
+            background-size: 24px 24px;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .font-editorial {
+            font-family: 'Newsreader', Georgia, serif;
+            font-style: italic;
+        }
+
+        .font-mono-tech {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Sleek brutalist scrollbars */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+        ::-webkit-scrollbar-thumb { background: var(--border-hairline); border-radius: 1px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-hairline) var(--bg-secondary);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-[var(--text-primary)] selection:text-[var(--bg-primary)]">
+
+    <!-- 01 // TOP ARCHITECT EDITORIAL HEADER -->
+    <header class="border-b border-[var(--border-hairline)] bg-[var(--bg-primary)]/90 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-6 h-6 border border-[var(--border-strong)] bg-[var(--text-primary)] text-[var(--bg-primary)] flex items-center justify-center font-mono-tech font-bold text-xs">
+                    VG
+                </div>
+                <div>
+                    <div class="flex items-baseline space-x-2">
+                        <h1 class="text-sm font-bold tracking-tight text-[var(--text-primary)] uppercase">VOLTGRID <span class="text-[var(--text-muted)] font-normal">//</span> CYBER-PHYSICAL TWIN</h1>
+                        <span class="text-[9px] font-mono-tech text-[var(--text-secondary)] border border-[var(--border-hairline)] bg-[var(--bg-secondary)] px-1.5 py-0.5 rounded">DIN VDE 0701 &amp; SRE</span>
+                    </div>
+                    <p class="text-[11px] text-[var(--text-secondary)] font-editorial">Kontinuierliche 3-Phasen-Dynamik, Fortescue-Transformation &amp; SQLite WAL Studio</p>
+                </div>
+            </div>
+
+            <!-- STATUS TELEMETRY & THEME SWITCHER -->
+            <div class="flex items-center space-x-3 text-xs font-mono-tech">
+                <div class="hidden md:flex items-center space-x-2 px-2.5 py-1 border border-[var(--border-hairline)] bg-[var(--bg-secondary)] rounded text-[11px]">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="text-[var(--text-secondary)]">WAL INGEST: &lt; 0.5 ms</span>
+                </div>
+                <div class="flex items-center space-x-1.5 px-2.5 py-1 border border-[var(--border-hairline)] bg-[var(--bg-secondary)] rounded text-[11px]">
+                    <span class="text-[var(--text-muted)]">MODUS:</span>
+                    <span class="text-[var(--text-primary)] font-bold">GUEST SANDBOX</span>
+                </div>
+                <button id="theme-toggle-btn" class="px-2.5 py-1 rounded border border-[var(--border-hairline)] hover:border-[var(--text-primary)] text-[11px] font-mono-tech text-[var(--text-primary)] transition-all flex items-center gap-1.5 bg-[var(--bg-card)] cursor-pointer">
+                    <span id="theme-icon">☾</span>
+                    <span id="theme-text">DARK</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 02 // TABS & DB SWITCHER BAR -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row md:items-center justify-between border-t border-[var(--border-hairline)] py-1.5 gap-3">
+            <div class="flex space-x-1 text-xs font-mono-tech font-medium">
+                <button onclick="switchTab('tab-sql')" id="btn-tab-sql" class="tab-btn px-3 py-1.5 border-b-2 border-[var(--text-primary)] text-[var(--text-primary)] font-bold flex items-center space-x-2 transition">
+                    <span>[01 // SQL QUERY STUDIO]</span>
+                </button>
+                <button onclick="switchTab('tab-invariants')" id="btn-tab-invariants" class="tab-btn px-3 py-1.5 border-b-2 border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center space-x-2 transition">
+                    <span>[02 // INVARIANT GATES]</span>
+                </button>
+                <button onclick="switchTab('tab-phasor')" id="btn-tab-phasor" class="tab-btn px-3 py-1.5 border-b-2 border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center space-x-2 transition">
+                    <span>[03 // CYBER-PHYSICAL PHASOR]</span>
+                </button>
+            </div>
+
+            <!-- DB SELECTOR DROPDOWN -->
+            <div class="flex items-center space-x-2 text-xs font-mono-tech">
+                <span class="text-[var(--text-muted)] uppercase text-[10px]">Aktive DB:</span>
+                <select id="db-selector" onchange="onDatabaseChange()" class="bg-[var(--bg-secondary)] border border-[var(--border-hairline)] hover:border-[var(--text-primary)] text-[var(--text-primary)] px-2.5 py-1 rounded focus:outline-none text-xs cursor-pointer">
+                    <!-- Populated via JS -->
+                </select>
+                <span id="db-size-badge" class="px-2 py-0.5 rounded bg-[var(--bg-secondary)] border border-[var(--border-hairline)] text-[10px] text-[var(--text-muted)] font-mono">-- KB</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- 03 // MAIN WORKSPACE STAGE -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+        <!-- ================================================================= -->
+        <!-- TAB 1: SQL QUERY STUDIO & TABLE EXPLORER -->
+        <!-- ================================================================= -->
+        <div id="tab-sql" class="tab-content space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                
+                <!-- Left Sidebar: Tables & Entities Browser -->
+                <div class="lg:col-span-1 bg-[var(--bg-card)] border border-[var(--border-hairline)] rounded p-4 space-y-4 flex flex-col justify-between shadow-sm">
+                    <div>
+                        <div class="flex items-center justify-between border-b border-[var(--border-hairline)] pb-2">
+                            <span class="text-[10px] uppercase font-mono-tech tracking-wider text-[var(--text-muted)] font-bold">RELATIONEN &amp; VIEWS</span>
+                            <span id="tables-count" class="text-[10px] font-mono-tech text-[var(--text-primary)] font-bold">0</span>
+                        </div>
+                        <div id="tables-list" class="space-y-1 mt-3 font-mono-tech text-xs max-h-80 overflow-y-auto">
+                            <div class="text-[var(--text-muted)] text-[11px] py-4 text-center">Lade Tabellen...</div>
+                        </div>
+                    </div>
+
+                    <div class="pt-3 border-t border-[var(--border-hairline)] text-[11px] text-[var(--text-muted)] font-mono-tech">
+                        <span>Klicke auf eine Tabelle für automatisches</span>
+                        <code class="text-[var(--text-primary)] font-bold block mt-0.5">SELECT * ... LIMIT 25;</code>
+                    </div>
+                </div>
+
+                <!-- Right Stage: SQL Query Console, Presets & Results -->
+                <div class="lg:col-span-3 space-y-4">
+                    
+                    <!-- Presets Bar -->
+                    <div class="bg-[var(--bg-card)] border border-[var(--border-hairline)] rounded p-3 space-y-2 shadow-sm">
+                        <span class="text-[10px] uppercase font-mono-tech tracking-wider text-[var(--text-muted)] font-bold block">DIAGNOSE-PRESETS:</span>
+                        <div id="presets-container" class="flex flex-wrap gap-2">
+                            <!-- Presets via JS -->
+                        </div>
+                    </div>
+
+                    <!-- Code Editor Box -->
+                    <div class="bg-[var(--bg-card)] border border-[var(--border-hairline)] rounded overflow-hidden flex flex-col shadow-sm">
+                        <div class="bg-[var(--bg-secondary)] px-4 py-2 border-b border-[var(--border-hairline)] flex items-center justify-between text-xs font-mono-tech">
+                            <span class="text-[var(--text-secondary)]">SQL Eingabe:</span>
+                            <div class="flex items-center space-x-3">
+                                <span class="text-[var(--text-muted)] text-[11px] hidden sm:inline">[Ctrl + Enter]</span>
+                                <button onclick="executeSqlQuery()" class="bg-[var(--text-primary)] hover:opacity-90 text-[var(--bg-primary)] font-bold px-3 py-1 rounded text-xs transition flex items-center space-x-1.5 cursor-pointer">
+                                    <span>▶ QUERY AUSFÜHREN</span>
+                                </button>
+                            </div>
+                        </div>
+                        <textarea id="sql-editor" rows="6" class="w-full bg-[var(--bg-primary)] text-[var(--text-primary)] font-mono-tech p-4 text-xs focus:outline-none resize-y border-0 leading-relaxed" placeholder="SELECT * FROM ...;"></textarea>
+                        
+                        <div class="bg-[var(--bg-secondary)] px-4 py-2 border-t border-[var(--border-hairline)] flex items-center justify-between text-xs font-mono-tech text-[var(--text-muted)]">
+                            <span id="query-time-status">Bereit</span>
+                            <span id="query-row-status"></span>
+                        </div>
+                    </div>
+
+                    <!-- Execution Plan / Query Plan -->
+                    <div id="query-plan-wrapper" class="bg-[var(--bg-card)] border border-[var(--border-hairline)] rounded p-3 text-xs font-mono-tech text-[var(--text-secondary)] flex items-center justify-between shadow-sm">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-[var(--text-primary)] font-bold">B-Tree Plan:</span>
+                            <span id="query-plan-text" class="text-[var(--text-muted)]">Keine aktive Abfrage.</span>
+                        </div>
+                    </div>
+
+                    <!-- Results Table -->
+                    <div class="bg-[var(--bg-card)] border border-[var(--border-hairline)] rounded overflow-hidden shadow-sm">
+                        <div class="overflow-x-auto max-h-96">
+                            <table class="w-full text-left text-xs font-mono-tech text-[var(--text-primary)]">
+                                <thead id="result-head" class="bg-[var(--bg-secondary)] sticky top-0 uppercase text-[var(--text-muted)] border-b border-[var(--border-hairline)]">
+                                    <tr><th class="px-4 py-2.5 font-bold">Ergebnis</th></tr>
+                                </thead>
+                                <tbody id="result-body" class="divide-y divide-[var(--border-hairline)]">
+                                    <tr><td class="px-4 py-6 text-center text-[var(--text-muted)]">Führe eine Query aus.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- TAB 2: INVARIANT VERIFICATION GATES -->
+        <!-- ================================================================= -->
+        <div id="tab-invariants" class="tab-content hidden space-y-6">
+            <div class="bg-[var(--bg-card)] border border-[var(--border-hairline)] rounded p-6 space-y-5 shadow-sm">
+                <div class="border-b border-[var(--border-hairline)] pb-4">
+                    <span class="text-[10px] uppercase font-mono-tech tracking-wider text-[var(--text-muted)] font-bold">FORMALE SCHRANKENPRÜFUNG</span>
+                    <h2 class="text-xl font-bold text-[var(--text-primary)] mt-1">Deterministische Invarianten &amp; Systemgrenzen</h2>
+                    <p class="text-xs text-[var(--text-secondary)] font-editorial mt-1">
+                        Mathematische und operative Invarianten über alle Schichten: Liquid Neural Core, P2P Paymaster und DIN VDE Drehstrom-Grid.
+                    </p>
+                </div>
+
+                <div id="invariants-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Invariant Cards via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- TAB 3: CYBER-PHYSICAL PHASOR STAGE -->
+        <!-- ================================================================= -->
+        <div id="tab-phasor" class="tab-content hidden space-y-6">
+            <div class="bg-[var(--bg-card)] border border-[var(--border-hairline)] rounded p-6 space-y-5 shadow-sm">
+                <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-[var(--border-hairline)] pb-4 gap-4">
+                    <div>
+                        <span class="text-[10px] uppercase font-mono-tech tracking-wider text-[var(--text-muted)] font-bold">KONTINUIERLICHE DREHSTROM-DYNAMIK</span>
+                        <h2 class="text-xl font-bold text-[var(--text-primary)] mt-1">Komplexes Zeigerdiagramm (Phasor Plane [ℂ])</h2>
+                        <p class="text-xs text-[var(--text-secondary)] font-editorial mt-0.5">Vektorfeld-Rotation bei 50.0 Hz mit Fortescue Symmetrie-Zerlegung</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2 font-mono-tech text-xs">
+                        <button onclick="setPhasorRegime('balanced')" class="px-2.5 py-1 rounded bg-[var(--bg-secondary)] border border-[var(--border-hairline)] hover:border-[var(--text-primary)] text-[var(--text-primary)] transition">01 // Symmetrisch</button>
+                        <button onclick="setPhasorRegime('inrush')" class="px-2.5 py-1 rounded bg-[var(--bg-secondary)] border border-[var(--border-hairline)] hover:border-[var(--text-primary)] text-amber-600 dark:text-amber-400 transition">02 // Motor-Peak (58A)</button>
+                        <button onclick="setPhasorRegime('asymmetry')" class="px-2.5 py-1 rounded bg-[var(--bg-secondary)] border border-[var(--border-hairline)] hover:border-[var(--text-primary)] text-rose-600 dark:text-rose-400 transition">03 // Schieflast (u₂)</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 h-88 bg-[var(--bg-primary)] border border-[var(--border-hairline)] rounded overflow-hidden relative">
+                        <canvas id="canvas-phasor" class="w-full h-full block cursor-crosshair"></canvas>
+                    </div>
+
+                    <div class="space-y-4 font-mono-tech text-xs">
+                        <div class="p-4 bg-[var(--bg-secondary)] border border-[var(--border-hairline)] rounded space-y-2">
+                            <span class="text-[var(--text-muted)] block text-[10px] uppercase font-bold border-b border-[var(--border-hairline)] pb-1">Fortescue Zerlegung:</span>
+                            <div class="text-[var(--text-secondary)] flex justify-between"><span>Mitsystem (I₁):</span><strong id="ph-i1" class="text-[var(--text-primary)]">18.4 A</strong></div>
+                            <div class="text-[var(--text-secondary)] flex justify-between"><span>Gegensystem (I₂):</span><strong id="ph-i2" class="text-rose-600 dark:text-rose-400">0.8 A</strong></div>
+                            <div class="text-[var(--text-secondary)] flex justify-between"><span>Schieflastgrad u₂:</span><strong id="ph-u2" class="text-emerald-600 dark:text-emerald-400">1.2 %</strong></div>
+                        </div>
+
+                        <div class="p-4 bg-[var(--bg-secondary)] border border-[var(--border-hairline)] rounded space-y-2">
+                            <span class="text-[var(--text-muted)] block text-[10px] uppercase font-bold border-b border-[var(--border-hairline)] pb-1">Phasen-Messwerte:</span>
+                            <div class="text-amber-600 dark:text-amber-400 flex justify-between"><span>L1:</span><span id="ph-l1">230V | 18.4A ∠ 0°</span></div>
+                            <div class="text-emerald-600 dark:text-emerald-400 flex justify-between"><span>L2:</span><span id="ph-l2">230V | 17.8A ∠ -120°</span></div>
+                            <div class="text-cyan-600 dark:text-cyan-400 flex justify-between"><span>L3:</span><span id="ph-l3">230V | 19.1A ∠ +120°</span></div>
+                        </div>
+
+                        <div class="p-3 border border-[var(--border-hairline)] rounded text-[11px] text-[var(--text-muted)] leading-relaxed">
+                            Normschranke nach DIN EN 50160: Der kontinuierliche Spannungs-Schieflastgrad <span class="font-bold text-[var(--text-primary)]">u₂</span> darf im 10-Minuten-Mittelwert 2.0% nicht überschreiten.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-[var(--border-hairline)] py-3 px-6 text-center text-[10px] font-mono-tech text-[var(--text-muted)] bg-[var(--bg-primary)]">
+        AETHELBURG // VOLTGRID CYBER-PHYSICAL SUITE &bull; WAL ENGINE DETERMINISTIC INVARIANTS
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
