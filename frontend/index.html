@@ -266,9 +266,9 @@
                         <p class="text-xs text-[var(--text-secondary)] font-editorial mt-0.5">Vektorfeld-Rotation bei 50.0 Hz mit Fortescue Symmetrie-Zerlegung</p>
                     </div>
                     <div class="flex flex-wrap gap-2 font-mono-tech text-xs">
-                        <button onclick="setPhasorRegime('balanced')" class="px-2.5 py-1 rounded bg-[var(--bg-secondary)] border border-[var(--border-hairline)] hover:border-[var(--text-primary)] text-[var(--text-primary)] transition">01 // Symmetrisch</button>
-                        <button onclick="setPhasorRegime('inrush')" class="px-2.5 py-1 rounded bg-[var(--bg-secondary)] border border-[var(--border-hairline)] hover:border-[var(--text-primary)] text-amber-600 dark:text-amber-400 transition">02 // Motor-Peak (58A)</button>
-                        <button onclick="setPhasorRegime('asymmetry')" class="px-2.5 py-1 rounded bg-[var(--bg-secondary)] border border-[var(--border-hairline)] hover:border-[var(--text-primary)] text-rose-600 dark:text-rose-400 transition">03 // Schieflast (u₂)</button>
+                        <button onclick="setPhasorRegime('balanced')" class="phasor-regime-btn px-2.5 py-1 rounded border border-[var(--text-primary)] bg-[var(--text-primary)] text-[var(--bg-primary)] font-bold transition cursor-pointer" data-regime="balanced">01 // Symmetrisch</button>
+                        <button onclick="setPhasorRegime('inrush')" class="phasor-regime-btn px-2.5 py-1 rounded bg-[var(--bg-secondary)] border border-[var(--border-hairline)] hover:border-[var(--text-primary)] text-amber-600 dark:text-amber-400 transition cursor-pointer" data-regime="inrush">02 // Motor-Peak (58A)</button>
+                        <button onclick="setPhasorRegime('asymmetry')" class="phasor-regime-btn px-2.5 py-1 rounded bg-[var(--bg-secondary)] border border-[var(--border-hairline)] hover:border-[var(--text-primary)] text-rose-600 dark:text-rose-400 transition cursor-pointer" data-regime="asymmetry">03 // Schieflast (u₂)</button>
                     </div>
                 </div>
 

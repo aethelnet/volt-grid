@@ -144,15 +144,19 @@ async function loadTablesForActiveDb() {
                  class="px-2 py-1.5 rounded border border-transparent hover:border-[var(--border-hairline)] hover:bg-[var(--bg-secondary)] cursor-pointer flex items-center justify-between group transition">
                 <div class="flex items-center space-x-2">
                     <span class="text-[9px] text-[var(--text-muted)] font-mono">[${e.type === 'view' ? 'VIEW' : 'TBL'}]</span>
-                    <span class="text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] font-semibold text-xs">${escapeHtml(e.name)}</span>
+                    <span class="table-name text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] font-semibold text-xs">${escapeHtml(e.name)}</span>
                 </div>
                 <span class="text-[10px] bg-[var(--bg-primary)] border border-[var(--border-hairline)] px-1.5 py-0.2 rounded text-[var(--text-muted)]">${e.row_count}</span>
             </div>
         `).join('');
 
-        // Standardmäßig die erste Tabelle in den Editor laden
+        // Intelligente Standard-Tabelle wählen: Bevorzuge Haupttabellen mit Daten, sonst erste Tabelle mit row_count > 0, sonst entities[0]
         if (entities.length > 0) {
-            selectQuickTable(entities[0].name);
+            const preferredNames = ['lgnn_nodes', 'telemetrie_messungen', 'v_geraete_uebersicht', 'trades', 'tournaments', 'open_positions'];
+            const defaultTable = entities.find(e => preferredNames.includes(e.name) && e.row_count > 0)
+                || entities.find(e => e.row_count > 0)
+                || entities[0];
+            selectQuickTable(defaultTable.name);
         }
     } catch (err) {
         listEl.innerHTML = `<div class="text-rose-500 py-3 text-center">${escapeHtml(err.message)}</div>`;
@@ -161,9 +165,28 @@ async function loadTablesForActiveDb() {
 
 function selectQuickTable(tableName) {
     const editor = document.getElementById('sql-editor');
-    if (!editor) return;
-    editor.value = `SELECT * FROM \`${tableName}\` LIMIT 25;`;
-    executeSqlQuery();
+    if (editor) {
+        editor.value = `SELECT * FROM \`${tableName}\` LIMIT 25;`;
+        executeSqlQuery();
+    }
+
+    // Aktive Tabelle in der Seitenleiste hervorheben
+    document.querySelectorAll('#tables-list > div').forEach(el => {
+        const nameSpan = el.querySelector('.table-name');
+        if (nameSpan && nameSpan.textContent.trim() === tableName) {
+            el.classList.add('bg-[var(--bg-secondary)]', 'border-[var(--text-primary)]', 'font-bold');
+            el.classList.remove('border-transparent');
+        } else {
+            el.classList.remove('bg-[var(--bg-secondary)]', 'border-[var(--text-primary)]', 'font-bold');
+            el.classList.add('border-transparent');
+        }
+    });
+
+    // Preset-Highlights zurücksetzen, da nun manuelle Tabelle aktiv ist
+    document.querySelectorAll('#presets-container button').forEach(btn => {
+        btn.classList.remove('bg-[var(--text-primary)]', 'text-[var(--bg-primary)]', 'border-[var(--text-primary)]', 'font-bold');
+        btn.classList.add('bg-[var(--bg-secondary)]', 'text-[var(--text-primary)]', 'border-[var(--border-hairline)]');
+    });
 }
 
 function renderPresets(presets) {
@@ -186,6 +209,23 @@ function applyPreset(idx) {
     const dbInfo = allDatabases.find(d => d.id === activeDbId);
     if (!dbInfo || !dbInfo.presets[idx]) return;
     const p = dbInfo.presets[idx];
+
+    // Aktiven Preset-Button sauber hervorheben (100% Kontrast, kein Text-Verstecken)
+    document.querySelectorAll('#presets-container button').forEach((btn, i) => {
+        if (i === idx) {
+            btn.classList.remove('bg-[var(--bg-secondary)]', 'text-[var(--text-primary)]', 'border-[var(--border-hairline)]');
+            btn.classList.add('bg-[var(--text-primary)]', 'text-[var(--bg-primary)]', 'border-[var(--text-primary)]', 'font-bold');
+        } else {
+            btn.classList.remove('bg-[var(--text-primary)]', 'text-[var(--bg-primary)]', 'border-[var(--text-primary)]', 'font-bold');
+            btn.classList.add('bg-[var(--bg-secondary)]', 'text-[var(--text-primary)]', 'border-[var(--border-hairline)]');
+        }
+    });
+
+    // Tabellen-Highlights zurücksetzen
+    document.querySelectorAll('#tables-list > div').forEach(el => {
+        el.classList.remove('bg-[var(--bg-secondary)]', 'border-[var(--text-primary)]', 'font-bold');
+        el.classList.add('border-transparent');
+    });
 
     const editor = document.getElementById('sql-editor');
     if (editor) {
@@ -406,6 +446,20 @@ function resizePhasor() {
 }
 
 function setPhasorRegime(regime) {
+    document.querySelectorAll('.phasor-regime-btn').forEach(btn => {
+        const r = btn.getAttribute('data-regime');
+        if (r === regime) {
+            btn.classList.remove('bg-[var(--bg-secondary)]', 'border-[var(--border-hairline)]', 'text-amber-600', 'text-rose-600', 'dark:text-amber-400', 'dark:text-rose-400', 'text-[var(--text-primary)]');
+            btn.classList.add('bg-[var(--text-primary)]', 'text-[var(--bg-primary)]', 'border-[var(--text-primary)]', 'font-bold');
+        } else {
+            btn.classList.remove('bg-[var(--text-primary)]', 'text-[var(--bg-primary)]', 'border-[var(--text-primary)]', 'font-bold');
+            btn.classList.add('bg-[var(--bg-secondary)]', 'border-[var(--border-hairline)]');
+            if (r === 'inrush') btn.classList.add('text-amber-600', 'dark:text-amber-400');
+            else if (r === 'asymmetry') btn.classList.add('text-rose-600', 'dark:text-rose-400');
+            else btn.classList.add('text-[var(--text-primary)]');
+        }
+    });
+
     if (regime === 'balanced') {
         phasorState = { u1: 230, u2: 230, u3: 230, i1: 18.4, i2: 17.8, i3: 19.1, cosPhi: 0.94 };
     } else if (regime === 'inrush') {
@@ -418,12 +472,19 @@ function setPhasorRegime(regime) {
     const i2 = Math.abs(Math.max(phasorState.i1, phasorState.i2, phasorState.i3) - Math.min(phasorState.i1, phasorState.i2, phasorState.i3)) / 2;
     const u2 = (i2 / (iAvg || 1)) * 100;
 
-    document.getElementById('ph-i1').textContent = `${iAvg.toFixed(1)} A`;
-    document.getElementById('ph-i2').textContent = `${i2.toFixed(1)} A`;
-    document.getElementById('ph-u2').textContent = `${u2.toFixed(1)} %`;
-    document.getElementById('ph-l1').textContent = `${phasorState.u1}V | ${phasorState.i1}A ∠ 0°`;
-    document.getElementById('ph-l2').textContent = `${phasorState.u2}V | ${phasorState.i2}A ∠ -120°`;
-    document.getElementById('ph-l3').textContent = `${phasorState.u3}V | ${phasorState.i3}A ∠ +120°`;
+    const elI1 = document.getElementById('ph-i1');
+    const elI2 = document.getElementById('ph-i2');
+    const elU2 = document.getElementById('ph-u2');
+    const elL1 = document.getElementById('ph-l1');
+    const elL2 = document.getElementById('ph-l2');
+    const elL3 = document.getElementById('ph-l3');
+
+    if (elI1) elI1.textContent = `${iAvg.toFixed(1)} A`;
+    if (elI2) elI2.textContent = `${i2.toFixed(1)} A`;
+    if (elU2) elU2.textContent = `${u2.toFixed(1)} %`;
+    if (elL1) elL1.textContent = `${phasorState.u1}V | ${phasorState.i1}A ∠ 0°`;
+    if (elL2) elL2.textContent = `${phasorState.u2}V | ${phasorState.i2}A ∠ -120°`;
+    if (elL3) elL3.textContent = `${phasorState.u3}V | ${phasorState.i3}A ∠ +120°`;
 }
 
 function escapeHtml(str) {

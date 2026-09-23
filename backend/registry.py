@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+MONOREPO_ROOT = Path(__file__).resolve().parents[3]
 
 def resolve_db_path(candidates, default):
     for c in candidates:
@@ -17,10 +17,13 @@ DATABASE_REGISTRY = {
         "name": "LGNN Neural Core",
         "description": "Liquid Graph Neural Network Synapsen, Neuronen und Kognitions-Commits",
         "path": resolve_db_path([
-            os.getenv("LGNN_DB_PATH"),
-            BASE_DIR / "data" / "lgnn.db",
-            Path.cwd() / "data" / "lgnn.db",
-        ], default=BASE_DIR / "data" / "lgnn.db"),
+            Path(__file__).resolve().parent.parent / "data" / "lgnn.db",
+            MONOREPO_ROOT / "packages" / "aethelnet-node" / "lgnn.db",
+            "/home/ubuntu/voltgrid/data/lgnn.db",
+            "/home/ubuntu/auratic-systems-prime/packages/aethelnet-node/lgnn.db",
+            "/home/ubuntu/aethelburg-observer/lgnn.db",
+            "/home/ubuntu/lgnn.db",
+        ], default=MONOREPO_ROOT / "packages" / "aethelnet-node" / "lgnn.db"),
         "category": "Neural Architecture",
         "presets": [
             {
@@ -30,13 +33,13 @@ DATABASE_REGISTRY = {
             },
             {
                 "title": "Letzte kognitive Commits",
-                "sql": "SELECT commit_id, message, timestamp, nodes_count, edges_count\nFROM lgnn_commits\nORDER BY timestamp DESC\nLIMIT 10;",
+                "sql": "SELECT hash, parent_hash, coherence_score, description, timestamp\nFROM lgnn_commits\nORDER BY timestamp DESC\nLIMIT 10;",
                 "description": "Inspektion der Ouroboros-Graphenmutationen und Revisionshistorie."
             },
             {
-                "title": "Registrierte autonome Agenten",
-                "sql": "SELECT agent_id, name, role, status, last_seen\nFROM agent_registry\nORDER BY last_seen DESC;",
-                "description": "Flotte aller aktiven autonomen Agenten im Aethelnet-Mesh."
+                "title": "Stärkste Synapsen (Edges)",
+                "sql": "SELECT source, target, weight\nFROM lgnn_edges\nORDER BY weight DESC\nLIMIT 15;",
+                "description": "Synaptische Kopplungsstärken zwischen kognitiven Neuronen im dynamischen Graph."
             }
         ]
     },
@@ -45,10 +48,9 @@ DATABASE_REGISTRY = {
         "name": "Trade Ledger Live",
         "description": "Echtzeit-Ausführungsbuch der Sovereign Trading Engine",
         "path": resolve_db_path([
-            os.getenv("TRADE_LEDGER_PATH"),
-            BASE_DIR / "data" / "trade_ledger.db",
-            Path.cwd() / "trade_ledger.db",
-        ], default=BASE_DIR / "data" / "trade_ledger.db"),
+            MONOREPO_ROOT / "trade_ledger_live.db",
+            "/home/ubuntu/auratic-systems-prime/trade_ledger.db",
+        ], default=MONOREPO_ROOT / "trade_ledger_live.db"),
         "category": "Algorithmic Finance",
         "presets": [
             {
@@ -68,10 +70,9 @@ DATABASE_REGISTRY = {
         "name": "Guardian & P2P Mesh",
         "description": "Aethelnet Guardian Registry, offene Positionen und On-Chain Sentinel",
         "path": resolve_db_path([
-            os.getenv("GUARDIAN_DB_PATH"),
-            BASE_DIR / "data" / "guardian.db",
-            BASE_DIR / "data" / "aethelnet_guardian.db",
-        ], default=BASE_DIR / "data" / "guardian.db"),
+            MONOREPO_ROOT / "data" / "aethelnet_guardian.db",
+            "/home/ubuntu/auratic-systems-prime/sovereign_trading_engine/crawler/aethelnet_guardian.db",
+        ], default=MONOREPO_ROOT / "data" / "aethelnet_guardian.db"),
         "category": "Sentinel & Security",
         "presets": [
             {
@@ -86,9 +87,9 @@ DATABASE_REGISTRY = {
         "name": "Edison Tournament State",
         "description": "Deterministische State-Machine für Edison-Format Turniere",
         "path": resolve_db_path([
-            os.getenv("TOURNAMENTS_DB_PATH"),
-            BASE_DIR / "data" / "tournaments.db",
-        ], default=BASE_DIR / "data" / "tournaments.db"),
+            MONOREPO_ROOT / "apps" / "ygo_rl" / "tournaments.db",
+            "/home/ubuntu/ygo_service/apps/tournaments.db",
+        ], default=MONOREPO_ROOT / "apps" / "ygo_rl" / "tournaments.db"),
         "category": "State Machine & WASM",
         "presets": [
             {
@@ -109,9 +110,9 @@ DATABASE_REGISTRY = {
         "description": "3-Phasen-Drehstromnetz, Fortescue-Asymmetrie und DIN VDE 0701 Verifikation",
         "path": resolve_db_path([
             os.getenv("VOLTBASE_PATH"),
-            BASE_DIR / "data" / "voltbase.db",
-            Path.cwd() / "voltbase.db",
-        ], default=BASE_DIR / "data" / "voltbase.db"),
+            Path(__file__).resolve().parent.parent / "data" / "voltbase.db",
+            "data/voltbase.db",
+        ], default=Path(__file__).resolve().parent.parent / "data" / "voltbase.db"),
         "category": "Cyber-Physical Systems",
         "presets": [
             {
@@ -129,7 +130,7 @@ DATABASE_REGISTRY = {
 }
 
 def get_available_databases():
-    """Gibt Metadaten zu allen registrierten Datenbanken zurück."""
+    """Gibt Metadaten zu allen existierenden Datenbanken zurück."""
     results = []
     for key, info in DATABASE_REGISTRY.items():
         p = Path(info["path"])
@@ -139,17 +140,14 @@ def get_available_databases():
         wal_size_bytes = wal_path.stat().st_size if wal_path.exists() else 0
         
         results.append({
-            "id": info["id"],
+            "id": key,
             "name": info["name"],
             "description": info["description"],
             "category": info["category"],
             "path": str(p),
             "exists": exists,
-            "size_kb": round(size_bytes / 1024, 2),
-            "wal_size_kb": round(wal_size_bytes / 1024, 2),
+            "size_kb": round(size_bytes / 1024, 1),
+            "wal_size_kb": round(wal_size_bytes / 1024, 1),
             "presets": info["presets"]
         })
     return results
-
-def get_db_info(db_id: str):
-    return DATABASE_REGISTRY.get(db_id)
