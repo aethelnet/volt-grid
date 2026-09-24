@@ -10,7 +10,7 @@ Das System verbindet zeitkontinuierliche Vektorfelder in der komplexen Ebene mit
 
 ---
 
-## ⚡ Kernfunktionen
+## Kernfunktionen
 
 1. **Fortescue-Symmetrische Komponenten (Phasor Decomposition)**:
    - Zerlegt asymmetrische Dreiphasen-Messungen ($I_{L1}, I_{L2}, I_{L3}$) in Echtzeit in Mit- ($I_1$), Gegen- ($I_2$) und Nullsysteme ($I_0$).
@@ -33,7 +33,7 @@ Das System verbindet zeitkontinuierliche Vektorfelder in der komplexen Ebene mit
 
 ---
 
-## 🚀 Schnelleinstieg
+## Schnelleinstieg
 
 ### Voraussetzungen
 - Python 3.10+
@@ -55,11 +55,11 @@ python3 -m backend.app
 ```
 
 Öffne im Browser:
-👉 **[http://localhost:8050](http://localhost:8050)**
+**[http://localhost:8050](http://localhost:8050)**
 
 ---
 
-## 🧪 Test-Suite
+## Test-Suite
 
 ```bash
 python3 -m unittest discover tests
@@ -71,6 +71,6 @@ python3 -m unittest discover tests
 
 ---
 
-## 🔒 Lizenz
+## Lizenz
 
 GNU Affero General Public License v3.0 (AGPLv3). Siehe [LICENSE](LICENSE).
