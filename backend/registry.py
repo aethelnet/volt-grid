@@ -67,25 +67,6 @@ DATABASE_REGISTRY = {
             }
         ]
     },
-    "guardian": {
-        "id": "guardian",
-        "name": "Guardian & P2P Mesh",
-        "description": "Aethelnet Guardian Registry, offene Positionen und On-Chain Sentinel",
-        "path": resolve_db_path([
-            Path(__file__).resolve().parent.parent / "data" / "aethelnet_guardian.db",
-            "/home/ubuntu/voltgrid/data/aethelnet_guardian.db",
-            "/home/nikahrlyn/auratic-systems-prime/data/aethelnet_guardian.db",
-            MONOREPO_ROOT / "data" / "aethelnet_guardian.db",
-        ], default=Path(__file__).resolve().parent.parent / "data" / "aethelnet_guardian.db"),
-        "category": "Sentinel & Security",
-        "presets": [
-            {
-                "title": "Aktive Guardian Positionen",
-                "sql": "SELECT * FROM open_positions LIMIT 20;",
-                "description": "Überwachung der aktiven Sentinel-Sicherungsorders und Deckungen."
-            }
-        ]
-    },
     "tournaments": {
         "id": "tournaments",
         "name": "Edison Tournament State",

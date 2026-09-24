@@ -164,7 +164,7 @@ async function loadTablesForActiveDb() {
 
         // Intelligente Standard-Tabelle wählen: Bevorzuge Haupttabellen mit Daten, sonst erste Tabelle mit row_count > 0, sonst entities[0]
         if (entities.length > 0) {
-            const preferredNames = ['lgnn_nodes', 'telemetrie_messungen', 'v_geraete_uebersicht', 'trades', 'tournaments', 'open_positions'];
+            const preferredNames = ['lgnn_nodes', 'telemetrie_messungen', 'v_geraete_uebersicht', 'trades', 'tournaments'];
             const defaultTable = entities.find(e => preferredNames.includes(e.name) && e.row_count > 0)
                 || entities.find(e => e.row_count > 0)
                 || entities[0];
