@@ -99,6 +99,16 @@ def get_database_tables(db_id: str):
     finally:
         conn.close()
 
+def sanitize_cell_value(val: Any) -> Any:
+    """Konvertiert Rohdaten (insb. BLOBs / Byte-Arrays) in JSON-sichere Darstellungen."""
+    if isinstance(val, (bytes, bytearray)):
+        try:
+            return val.decode("utf-8")
+        except UnicodeDecodeError:
+            hex_prefix = val[:8].hex()
+            return f"<BLOB {len(val)}B: 0x{hex_prefix}...>"
+    return val
+
 @app.post("/api/db/{db_id}/query")
 def execute_database_query(db_id: str, req: QueryRequest):
     """Führt eine relationale SQL-Abfrage auf der gewählten Datenbank aus."""
@@ -138,8 +148,13 @@ def execute_database_query(db_id: str, req: QueryRequest):
 
         if cur.description:
             columns = [c[0] for c in cur.description]
-            rows = [list(r) for r in cur.fetchall()]
-            total_rows = len(rows)
+            raw_rows = cur.fetchall()
+            total_rows = len(raw_rows)
+            # Begrenzung auf 250 Zeilen und BLOB-Sanitizing gegen UnicodeDecodeError
+            rows = [
+                [sanitize_cell_value(val) for val in r]
+                for r in raw_rows[:250]
+            ]
 
             # Query Plan abrufen
             query_plan = []
@@ -155,7 +170,7 @@ def execute_database_query(db_id: str, req: QueryRequest):
                 "success": True,
                 "is_select": True,
                 "columns": columns,
-                "rows": rows[:250], # Max 250 rows to protect UI
+                "rows": rows,
                 "total_rows": total_rows,
                 "execution_time_ms": execution_time_ms,
                 "query_plan": query_plan

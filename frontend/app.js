@@ -137,6 +137,10 @@ async function loadTablesForActiveDb() {
 
     try {
         const res = await fetch(`/api/db/${activeDbId}/tables`);
+        if (!res.ok) {
+            const rawText = await res.text();
+            throw new Error(`HTTP ${res.status}: ${rawText.slice(0, 100)}`);
+        }
         const data = await res.json();
         const entities = data.entities || [];
 
@@ -266,7 +270,18 @@ async function executeSqlQuery() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: sql, read_only: true })
         });
-        const result = await res.json();
+
+        let result;
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+            result = await res.json();
+        } else {
+            const rawText = await res.text();
+            result = {
+                success: false,
+                error: `HTTP ${res.status}: ${rawText.slice(0, 150)}`
+            };
+        }
 
         if (!result.success) {
             timeStatus.innerHTML = `<span class="text-rose-500 font-bold">SQL Fehler</span>`;
@@ -318,6 +333,7 @@ async function executeSqlQuery() {
 async function loadInvariants() {
     try {
         const res = await fetch('/api/invariants');
+        if (!res.ok) return;
         const gates = await res.json();
 
         const grid = document.getElementById('invariants-grid');

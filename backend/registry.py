@@ -48,19 +48,21 @@ DATABASE_REGISTRY = {
         "name": "Trade Ledger Live",
         "description": "Echtzeit-Ausführungsbuch der Sovereign Trading Engine",
         "path": resolve_db_path([
-            MONOREPO_ROOT / "trade_ledger_live.db",
             "/home/ubuntu/auratic-systems-prime/trade_ledger.db",
-        ], default=MONOREPO_ROOT / "trade_ledger_live.db"),
+            "/home/nikahrlyn/auratic-systems-prime/trade_ledger.db",
+            MONOREPO_ROOT / "trade_ledger.db",
+            MONOREPO_ROOT / "trade_ledger_live.db",
+        ], default="/home/ubuntu/auratic-systems-prime/trade_ledger.db"),
         "category": "Algorithmic Finance",
         "presets": [
             {
                 "title": "Letzte Ausführungen & Fills",
-                "sql": "SELECT id, symbol, side, price, size, pnl, fee, timestamp\nFROM trades\nORDER BY timestamp DESC\nLIMIT 15;",
+                "sql": "SELECT id, timestamp, coin, side, entry_px, exit_px, size, notional_usd, fee_paid_usd, net_pnl_usd, exit_reason\nFROM trades\nORDER BY timestamp DESC\nLIMIT 15;",
                 "description": "Prüfung von Slippage, Order-Fills und realisierten PnL-Werten."
             },
             {
                 "title": "PnL & Volumen Aggregation",
-                "sql": "SELECT \n    symbol,\n    COUNT(id) AS trade_count,\n    ROUND(SUM(pnl), 2) AS total_pnl,\n    ROUND(AVG(fee), 4) AS avg_fee\nFROM trades\nGROUP BY symbol;",
+                "sql": "SELECT \n    coin,\n    COUNT(id) AS trade_count,\n    ROUND(SUM(net_pnl_usd), 2) AS total_pnl_usd,\n    ROUND(AVG(fee_paid_usd), 4) AS avg_fee_usd\nFROM trades\nGROUP BY coin;",
                 "description": "Statistische Performance-Übersicht pro gehandeltem Asset."
             }
         ]
@@ -70,9 +72,11 @@ DATABASE_REGISTRY = {
         "name": "Guardian & P2P Mesh",
         "description": "Aethelnet Guardian Registry, offene Positionen und On-Chain Sentinel",
         "path": resolve_db_path([
+            Path(__file__).resolve().parent.parent / "data" / "aethelnet_guardian.db",
+            "/home/ubuntu/voltgrid/data/aethelnet_guardian.db",
+            "/home/nikahrlyn/auratic-systems-prime/data/aethelnet_guardian.db",
             MONOREPO_ROOT / "data" / "aethelnet_guardian.db",
-            "/home/ubuntu/auratic-systems-prime/sovereign_trading_engine/crawler/aethelnet_guardian.db",
-        ], default=MONOREPO_ROOT / "data" / "aethelnet_guardian.db"),
+        ], default=Path(__file__).resolve().parent.parent / "data" / "aethelnet_guardian.db"),
         "category": "Sentinel & Security",
         "presets": [
             {
