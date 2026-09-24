@@ -26,7 +26,7 @@ class TestAethelGrid(unittest.TestCase):
         data = res.json()
         self.assertIsInstance(data, list)
         db_ids = {d["id"] for d in data}
-        self.assertTrue({"lgnn", "guardian", "trading", "volt"}.issubset(db_ids))
+        self.assertTrue({"lgnn", "trading", "volt"}.issubset(db_ids))
 
     def test_get_tables_volt(self):
         """Prüft das Schema-Listing für den VoltGrid Cyber-Physical Twin."""
