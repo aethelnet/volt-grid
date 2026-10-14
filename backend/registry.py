@@ -48,11 +48,11 @@ DATABASE_REGISTRY = {
         "name": "Trade Ledger Live",
         "description": "Echtzeit-Ausführungsbuch der Sovereign Trading Engine",
         "path": resolve_db_path([
-            "/home/ubuntu/auratic-systems-prime/trade_ledger.db",
-            "/home/nikahrlyn/auratic-systems-prime/trade_ledger.db",
+            os.getenv("TRADE_LEDGER_PATH"),
+            Path(__file__).resolve().parent.parent.parent / "auratic-systems-prime" / "trade_ledger.db",
             MONOREPO_ROOT / "trade_ledger.db",
             MONOREPO_ROOT / "trade_ledger_live.db",
-        ], default="/home/ubuntu/auratic-systems-prime/trade_ledger.db"),
+        ], default=MONOREPO_ROOT / "trade_ledger.db"),
         "category": "Algorithmic Finance",
         "presets": [
             {

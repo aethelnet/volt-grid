@@ -34,7 +34,7 @@ class QueryRequest(BaseModel):
 # -----------------------------------------------------------------------------
 # DATABASE CONNECTION HELPER
 # -----------------------------------------------------------------------------
-def get_db_conn(db_id: str):
+def get_db_conn(db_id: str, read_only: bool = True):
     if db_id not in DATABASE_REGISTRY:
         raise HTTPException(status_code=404, detail=f"Unbekannte Datenbank-ID: '{db_id}'")
     
@@ -43,9 +43,14 @@ def get_db_conn(db_id: str):
     if not db_path.exists():
         raise HTTPException(status_code=404, detail=f"Datenbankdatei existiert nicht: {db_path}")
 
-    conn = sqlite3.connect(str(db_path), timeout=5.0)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode = WAL;")
+    if read_only:
+        conn = sqlite3.connect(f"file:{db_path.resolve()}?mode=ro", uri=True, timeout=5.0)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA query_only = ON;")
+    else:
+        conn = sqlite3.connect(str(db_path), timeout=5.0)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode = WAL;")
     return conn
 
 # -----------------------------------------------------------------------------
@@ -60,7 +65,7 @@ def list_databases():
 @app.get("/api/db/{db_id}/tables")
 def get_database_tables(db_id: str):
     """Liefert alle Tabellen, Zeilenzahlen und Spaltenschemata einer Datenbank."""
-    conn = get_db_conn(db_id)
+    conn = get_db_conn(db_id, read_only=True)
     try:
         cur = conn.cursor()
         cur.execute("""
@@ -112,12 +117,17 @@ def sanitize_cell_value(val: Any) -> Any:
 @app.post("/api/db/{db_id}/query")
 def execute_database_query(db_id: str, req: QueryRequest):
     """Führt eine relationale SQL-Abfrage auf der gewählten Datenbank aus."""
+    import os
     sql = req.query.strip()
     if not sql:
         raise HTTPException(status_code=400, detail="Leere SQL-Abfrage übergeben.")
 
-    # 1. READ-ONLY SCHUTZSCHRANKE (AST / Regex Token Parser)
-    if req.read_only:
+    # Server-seitige Read-Only-Erzwingung (Client darf read_only nicht eigenmächtig deaktivieren)
+    allow_writes = os.getenv("VOLTGRID_ALLOW_WRITES", "0") == "1"
+    enforce_read_only = True if not allow_writes else bool(req.read_only)
+
+    # 1. READ-ONLY SCHUTZSCHRANKE (AST / Regex Token Parser + SQLite mode=ro)
+    if enforce_read_only:
         # Nur SELECT und EXPLAIN erlauben
         first_token = re.split(r'\s+', sql.lstrip('(; \n\t'))[0].upper()
         if first_token not in ("SELECT", "EXPLAIN", "WITH"):
@@ -139,7 +149,7 @@ def execute_database_query(db_id: str, req: QueryRequest):
                     detail=f"Sicherheitsfilter: Destruktives Schlüsselwort gefunden. Im SRE-Studio sind nur Lesezugriffe gestattet."
                 )
 
-    conn = get_db_conn(db_id)
+    conn = get_db_conn(db_id, read_only=enforce_read_only)
     try:
         cur = conn.cursor()
         start_time = time.perf_counter()

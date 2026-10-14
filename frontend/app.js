@@ -499,9 +499,15 @@ function setPhasorRegime(regime) {
         phasorState = { u1: 231, u2: 233, u3: 226, i1: 12.0, i2: 3.1, i3: 38.5, cosPhi: 0.91 };
     }
 
-    const iAvg = (phasorState.i1 + phasorState.i2 + phasorState.i3) / 3;
-    const i2 = Math.abs(Math.max(phasorState.i1, phasorState.i2, phasorState.i3) - Math.min(phasorState.i1, phasorState.i2, phasorState.i3)) / 2;
-    const u2 = (i2 / (iAvg || 1)) * 100;
+    // Komplexe Fortescue-Transformation mit Drehoperator a = exp(j * 2*pi/3)
+    // Für symmetrische Phasenwinkel (0°, -120°, +120°):
+    // |I_1| (Mitsystem)   = (I_L1 + I_L2 + I_L3) / 3
+    // |I_2| (Gegensystem) = (1/3) * sqrt((I_L1 - 0.5*(I_L2 + I_L3))^2 + 0.75*(I_L2 - I_L3)^2)
+    const iPos = (phasorState.i1 + phasorState.i2 + phasorState.i3) / 3.0;
+    const reNeg = phasorState.i1 - 0.5 * (phasorState.i2 + phasorState.i3);
+    const imNeg = (Math.sqrt(3) / 2.0) * (phasorState.i2 - phasorState.i3);
+    const iNeg = Math.hypot(reNeg, imNeg) / 3.0;
+    const u2 = (iNeg / (iPos || 1)) * 100.0;
 
     const elI1 = document.getElementById('ph-i1');
     const elI2 = document.getElementById('ph-i2');
@@ -510,8 +516,8 @@ function setPhasorRegime(regime) {
     const elL2 = document.getElementById('ph-l2');
     const elL3 = document.getElementById('ph-l3');
 
-    if (elI1) elI1.textContent = `${iAvg.toFixed(1)} A`;
-    if (elI2) elI2.textContent = `${i2.toFixed(1)} A`;
+    if (elI1) elI1.textContent = `${iPos.toFixed(1)} A`;
+    if (elI2) elI2.textContent = `${iNeg.toFixed(1)} A`;
     if (elU2) elU2.textContent = `${u2.toFixed(1)} %`;
     if (elL1) elL1.textContent = `${phasorState.u1}V | ${phasorState.i1}A ∠ 0°`;
     if (elL2) elL2.textContent = `${phasorState.u2}V | ${phasorState.i2}A ∠ -120°`;

@@ -68,11 +68,12 @@ class TestAethelGrid(unittest.TestCase):
             "INSERT INTO geraete (inventar_nr) VALUES ('99999');"
         ]
         for sql in destructive_queries:
-            res = self.client.post("/api/db/volt/query", json={
-                "query": sql,
-                "read_only": True
-            })
-            self.assertEqual(res.status_code, 403, f"Sicherheitslücke: '{sql}' wurde nicht blockiert!")
+            for ro_flag in (True, False):
+                res = self.client.post("/api/db/volt/query", json={
+                    "query": sql,
+                    "read_only": ro_flag
+                })
+                self.assertEqual(res.status_code, 403, f"Sicherheitslücke: '{sql}' (read_only={ro_flag}) wurde nicht blockiert!")
 
     def test_invariant_gates_evaluation(self):
         """Verifiziert die formale Prüfung aller Systemschranken."""
@@ -85,4 +86,6 @@ class TestAethelGrid(unittest.TestCase):
         gate_ids = {g["id"] for g in gates}
         self.assertIn("gate_vde_safety", gate_ids)
         self.assertIn("gate_grid_asymmetry", gate_ids)
+        self.assertIn("gate_en50160_grid_band", gate_ids)
         self.assertIn("gate_lgnn_stability", gate_ids)
+

@@ -54,29 +54,59 @@ def check_all_invariants():
             })
 
     # -------------------------------------------------------------------------
-    # GATE 2: P2P Paymaster Liquidität (Gasless Sponsoring)
-    # -------------------------------------------------------------------------
-    # Simulierter bzw. On-Chain Check
-    current_paymaster_eth = 0.084
-    min_required_eth = 0.02
-    gates.append({
-        "id": "gate_paymaster_liquidity",
-        "domain": "ERC-4337 Web3 Mesh",
-        "title": "TheForge Paymaster Gas-Reserve",
-        "formula": "B_Sepolia ≥ 0.02 ETH",
-        "status": "PASS" if current_paymaster_eth >= min_required_eth else "FAIL",
-        "metric_value": f"{current_paymaster_eth:.3f} ETH",
-        "detail": "AethelnetPaymaster.sol (0x9A48...298f)",
-        "target_bound": "≥ 0.020 ETH"
-    })
-
-    # -------------------------------------------------------------------------
-    # GATE 3: Cyber-Physical Grid Schieflast (Fortescue Symmetrie)
+    # GATE 2: DIN EN 50160 Spannungs- & Netzfrequenzband (Telemetrie-Schranke)
     # -------------------------------------------------------------------------
     volt_path = DATABASE_REGISTRY["volt"]["path"]
     if volt_path.exists():
         try:
-            conn = sqlite3.connect(str(volt_path), timeout=3.0)
+            conn = sqlite3.connect(f"file:{volt_path.resolve()}?mode=ro", uri=True, timeout=3.0)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT 
+                    COUNT(*) AS total_samples,
+                    SUM(CASE WHEN frequenz_hz < 49.5 OR frequenz_hz > 50.5 
+                              OR u_l1 < 207.0 OR u_l1 > 253.0
+                              OR u_l2 < 207.0 OR u_l2 > 253.0
+                              OR u_l3 < 207.0 OR u_l3 > 253.0 THEN 1 ELSE 0 END) AS violations,
+                    ROUND(AVG(frequenz_hz), 3) AS avg_freq,
+                    ROUND(MIN(u_l1), 1) AS min_u1
+                FROM telemetrie_messungen;
+            """)
+            row = cur.fetchone()
+            conn.close()
+
+            violations = int(row["violations"] or 0)
+            total_samples = int(row["total_samples"] or 0)
+            avg_freq = float(row["avg_freq"] or 50.0)
+            gates.append({
+                "id": "gate_en50160_grid_band",
+                "domain": "DIN EN 50160 Power Quality",
+                "title": "Spannungs- & Frequenzband (EN 50160)",
+                "formula": "49.5 Hz ≤ f ≤ 50.5 Hz ∧ U_Ln ∈ [207V, 253V]",
+                "status": "PASS" if violations == 0 else "WARN",
+                "metric_value": f"{avg_freq:.2f} Hz ({violations}/{total_samples} Verletzungen)",
+                "detail": f"Min U_L1: {row['min_u1']} V | Geprüfte Messpunkte: {total_samples}",
+                "target_bound": "230 V ±10% / 50 Hz ±1%"
+            })
+        except Exception as e:
+            gates.append({
+                "id": "gate_en50160_grid_band",
+                "domain": "DIN EN 50160 Power Quality",
+                "title": "Spannungs- & Frequenzband (EN 50160)",
+                "status": "UNKNOWN",
+                "metric_value": "DB Error",
+                "detail": str(e),
+                "target_bound": "230 V ±10%"
+            })
+
+    # -------------------------------------------------------------------------
+    # GATE 3: Cyber-Physical Grid Schieflast (Komplexe Fortescue-Transformation)
+    # -------------------------------------------------------------------------
+    if volt_path.exists():
+        try:
+            import cmath
+            conn = sqlite3.connect(f"file:{volt_path.resolve()}?mode=ro", uri=True, timeout=3.0)
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
             cur.execute("""
@@ -88,19 +118,33 @@ def check_all_invariants():
             conn.close()
 
             if latest:
-                delta_i = latest["schieflast_strom_a"]
-                is_balanced = (delta_i <= 15.0)
+                i1_mag = float(latest["i_l1"])
+                i2_mag = float(latest["i_l2"])
+                i3_mag = float(latest["i_l3"])
+                # Drehoperator a = exp(j * 2*pi/3); Phasenwinkel 0°, -120°, +120°
+                a = cmath.rect(1.0, 2.0 * cmath.pi / 3.0)
+                a2 = a * a
+                i_l1_phasor = complex(i1_mag, 0.0)
+                i_l2_phasor = i2_mag * a2
+                i_l3_phasor = i3_mag * a
+                # Mitsystem I_pos = (I_L1 + a*I_L2 + a^2*I_L3) / 3
+                # Gegensystem I_neg = (I_L1 + a^2*I_L2 + a*I_L3) / 3
+                i_pos = abs((i_l1_phasor + a * i_l2_phasor + a2 * i_l3_phasor) / 3.0)
+                i_neg = abs((i_l1_phasor + a2 * i_l2_phasor + a * i_l3_phasor) / 3.0)
+                u2_pct = (i_neg / i_pos * 100.0) if i_pos > 1e-9 else 0.0
+                delta_i = float(latest["schieflast_strom_a"])
+                is_balanced = (delta_i <= 15.0 and u2_pct <= 10.0)
                 gates.append({
                     "id": "gate_grid_asymmetry",
                     "domain": "Cyber-Physical Systems",
                     "title": "Drehstrom-Symmetrie (Fortescue u₂)",
-                    "formula": "ΔI = max(I) - min(I) ≤ 15.0 A",
+                    "formula": "I₂ = ⅓|I_L1 + a²I_L2 + aI_L3| ∧ ΔI ≤ 15.0 A",
                     "status": "PASS" if is_balanced else "FAIL",
-                    "metric_value": f"ΔI = {delta_i:.1f} A",
-                    "detail": f"L1: {latest['i_l1']}A | L2: {latest['i_l2']}A | L3: {latest['i_l3']}A",
+                    "metric_value": f"|I₂| = {i_neg:.1f} A (u₂ = {u2_pct:.1f}%)",
+                    "detail": f"L1: {i1_mag}A | L2: {i2_mag}A | L3: {i3_mag}A (ΔI = {delta_i:.1f}A)",
                     "target_bound": "≤ 15.0 A (DIN EN 50160)"
                 })
-        except Exception as e:
+        except Exception:
             pass
 
     # -------------------------------------------------------------------------
