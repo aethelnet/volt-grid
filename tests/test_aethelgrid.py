@@ -76,16 +76,50 @@ class TestAethelGrid(unittest.TestCase):
                 self.assertEqual(res.status_code, 403, f"Sicherheitslücke: '{sql}' (read_only={ro_flag}) wurde nicht blockiert!")
 
     def test_invariant_gates_evaluation(self):
-        """Verifiziert die formale Prüfung aller Systemschranken."""
+        """Verifiziert die formale Prüfung aller Systemschranken inkl. Status- und Werte-Integrität."""
         res = self.client.get("/api/invariants")
         self.assertEqual(res.status_code, 200)
         gates = res.json()
         self.assertIsInstance(gates, list)
-        self.assertEqual(len(gates), 4) # 4 definierte Invarianten
+        self.assertEqual(len(gates), 4)
 
-        gate_ids = {g["id"] for g in gates}
-        self.assertIn("gate_vde_safety", gate_ids)
-        self.assertIn("gate_grid_asymmetry", gate_ids)
-        self.assertIn("gate_en50160_grid_band", gate_ids)
-        self.assertIn("gate_lgnn_stability", gate_ids)
+        by_id = {g["id"]: g for g in gates}
+        expected_ids = {"gate_vde_safety", "gate_grid_asymmetry", "gate_en50160_grid_band", "gate_lgnn_stability"}
+        self.assertEqual(set(by_id.keys()), expected_ids)
+
+        for gid, g in by_id.items():
+            self.assertIn(
+                g["status"],
+                ("PASS", "WARN", "FAIL"),
+                f"Gate '{gid}' fiel auf '{g['status']}' zurück (Detail: {g.get('detail')})"
+            )
+            self.assertNotIn("DB Error", g.get("metric_value", ""))
+            self.assertNotIn("DB Busy", g.get("metric_value", ""))
+            self.assertTrue(g.get("formula"), f"Gate '{gid}' hat keine mathematische Formel definiert")
+
+        # Prüfe konkrete Werte auf den ausgelieferten Referenzdatenbanken
+        self.assertEqual(by_id["gate_lgnn_stability"]["status"], "PASS")
+        self.assertIn("|I₂| =", by_id["gate_grid_asymmetry"]["metric_value"])
+        self.assertIn("Hz", by_id["gate_en50160_grid_band"]["metric_value"])
+
+    def test_fortescue_symmetrical_components_math(self):
+        """Prüft die komplexe Fortescue-Transformation gegen analytische Referenzwerte."""
+        from backend.invariants import compute_fortescue_unbalance
+
+        # 1. Perfekt symmetrisches Drehstromsystem (16 A auf L1, L2, L3) -> |I_pos| = 16 A, |I_neg| = 0 A, u2 = 0%
+        i_pos, i_neg, u2_pct = compute_fortescue_unbalance(16.0, 16.0, 16.0)
+        self.assertAlmostEqual(i_pos, 16.0, places=6)
+        self.assertAlmostEqual(i_neg, 0.0, places=6)
+        self.assertAlmostEqual(u2_pct, 0.0, places=6)
+
+        # 2. Einphasige Überlast (30 A, 15 A, 15 A) -> |I_pos| = 20 A, |I_neg| = 5 A, u2 = 25.0%
+        i_pos_u, i_neg_u, u2_pct_u = compute_fortescue_unbalance(30.0, 15.0, 15.0)
+        self.assertAlmostEqual(i_pos_u, 20.0, places=6)
+        self.assertAlmostEqual(i_neg_u, 5.0, places=6)
+        self.assertAlmostEqual(u2_pct_u, 25.0, places=6)
+
+        # 3. Stromloses Netz (0 A, 0 A, 0 A) -> kein ZeroDivisionError
+        i_pos_z, i_neg_z, u2_pct_z = compute_fortescue_unbalance(0.0, 0.0, 0.0)
+        self.assertEqual((i_pos_z, i_neg_z, u2_pct_z), (0.0, 0.0, 0.0))
+
 

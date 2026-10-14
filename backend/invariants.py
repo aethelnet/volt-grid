@@ -1,6 +1,24 @@
+import cmath
 import sqlite3
 from pathlib import Path
 from backend.registry import DATABASE_REGISTRY
+
+
+def compute_fortescue_unbalance(i1_mag: float, i2_mag: float, i3_mag: float) -> tuple[float, float, float]:
+    """
+    Berechnet Mitsystem |I_pos|, Gegensystem |I_neg| und Unsymmetriegrad u_2 (%)
+    mittels komplexer Fortescue-Transformation unter symmetrischem Phasenwinkel (0°, -120°, +120°).
+    """
+    a = cmath.rect(1.0, 2.0 * cmath.pi / 3.0)
+    a2 = a * a
+    i_l1_phasor = complex(i1_mag, 0.0)
+    i_l2_phasor = i2_mag * a2
+    i_l3_phasor = i3_mag * a
+    i_pos = abs((i_l1_phasor + a * i_l2_phasor + a2 * i_l3_phasor) / 3.0)
+    i_neg = abs((i_l1_phasor + a2 * i_l2_phasor + a * i_l3_phasor) / 3.0)
+    u2_pct = (i_neg / i_pos * 100.0) if i_pos > 1e-9 else 0.0
+    return i_pos, i_neg, u2_pct
+
 
 def check_all_invariants():
     """Prüft deterministische Systemschranken und Sicherheits-Invarianten über alle Domänen."""
@@ -12,7 +30,7 @@ def check_all_invariants():
     lgnn_path = DATABASE_REGISTRY["lgnn"]["path"]
     if lgnn_path.exists():
         try:
-            conn = sqlite3.connect(str(lgnn_path), timeout=3.0)
+            conn = sqlite3.connect(f"file:{lgnn_path.resolve()}?mode=ro", uri=True, timeout=3.0)
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
             
@@ -105,7 +123,6 @@ def check_all_invariants():
     # -------------------------------------------------------------------------
     if volt_path.exists():
         try:
-            import cmath
             conn = sqlite3.connect(f"file:{volt_path.resolve()}?mode=ro", uri=True, timeout=3.0)
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
@@ -121,17 +138,7 @@ def check_all_invariants():
                 i1_mag = float(latest["i_l1"])
                 i2_mag = float(latest["i_l2"])
                 i3_mag = float(latest["i_l3"])
-                # Drehoperator a = exp(j * 2*pi/3); Phasenwinkel 0°, -120°, +120°
-                a = cmath.rect(1.0, 2.0 * cmath.pi / 3.0)
-                a2 = a * a
-                i_l1_phasor = complex(i1_mag, 0.0)
-                i_l2_phasor = i2_mag * a2
-                i_l3_phasor = i3_mag * a
-                # Mitsystem I_pos = (I_L1 + a*I_L2 + a^2*I_L3) / 3
-                # Gegensystem I_neg = (I_L1 + a^2*I_L2 + a*I_L3) / 3
-                i_pos = abs((i_l1_phasor + a * i_l2_phasor + a2 * i_l3_phasor) / 3.0)
-                i_neg = abs((i_l1_phasor + a2 * i_l2_phasor + a * i_l3_phasor) / 3.0)
-                u2_pct = (i_neg / i_pos * 100.0) if i_pos > 1e-9 else 0.0
+                i_pos, i_neg, u2_pct = compute_fortescue_unbalance(i1_mag, i2_mag, i3_mag)
                 delta_i = float(latest["schieflast_strom_a"])
                 is_balanced = (delta_i <= 15.0 and u2_pct <= 10.0)
                 gates.append({
@@ -152,7 +159,7 @@ def check_all_invariants():
     # -------------------------------------------------------------------------
     if volt_path.exists():
         try:
-            conn = sqlite3.connect(str(volt_path), timeout=3.0)
+            conn = sqlite3.connect(f"file:{volt_path.resolve()}?mode=ro", uri=True, timeout=3.0)
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
             cur.execute("""
