@@ -112,6 +112,13 @@ class TestVoltGridStudio(unittest.TestCase):
         for key in ("ts", "i1", "i2", "i3", "i_pos", "i_neg", "i_neutral", "u2_pct", "cos_phi"):
             self.assertIn(key, sample)
 
+    def test_wasm_snapshot_endpoint_serves_valid_sqlite(self):
+        """Prueft, dass /voltbase.db einen validen SQLite-3-Snapshot fuer den sql.js-WASM-Fallback ausliefert."""
+        res = self.client.get("/voltbase.db")
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.content.startswith(b"SQLite format 3"))
+        self.assertGreater(len(res.content), 50_000)
+
     def test_fortescue_and_vde_length_math(self):
         """Prueft Fortescue-Zerlegung und DIN VDE 0701-0702 Leitungslaengenzuschlag."""
         i_pos, i_neg, u2_pct = compute_fortescue_unbalance(16.0, 16.0, 16.0)

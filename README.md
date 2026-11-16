@@ -22,10 +22,10 @@ Das Werkzeug verbindet komplexe Zeigerrechnung in der Gausschen Zahlenebene (For
    - Exakter Leitungslaengenzuschlag nach DIN VDE 0701-0702: $0.3\,\Omega$ bis $5\,\text{m}$ Anschlussleitung $+\,0.1\,\Omega$ je weitere angefangene $7.5\,\text{m}$ (gedeckelt bei $1.0\,\Omega$, z. B. $50\,\text{m}$ Kabeltrommel $\rightarrow 0.90\,\Omega$).
    - Automatische Spannungs- und Frequenzbandpruefung ($230\,\text{V} \pm 10\,\%$, $50\,\text{Hz} \pm 1\,\%$) ueber die gesamte Messhistorie.
 
-3. **Read-Only SQLite WAL Query Studio (`[01 // SQL QUERY STUDIO]`)**:
-   - Sub-Millisekunden-Abfragen (`mode=ro` + `PRAGMA query_only = ON`) inklusive `EXPLAIN QUERY PLAN` B-Tree-Inspektion und Unterstuetzung fuer virtuelle Generated Columns (`schieflast_strom_a`).
-   - Mehrstufige Read-Only-Sandbox blockiert destruktive Operationen (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `ATTACH`, `PRAGMA ... =`).
-   - Fachspezifische Diagnose-Presets fuer gesperrte Betriebsmittel, Schieflast-Peaks $> 15\,\text{A}$, Leitungslaengenzuschlaege und Hersteller-Ausfallquoten.
+3. **Dual-Mode Read-Only SQLite Engine (`FastAPI WAL` + `sql.js WASM` Static Fallback)**:
+   - **Live-Server-Modus (`READ-ONLY WAL`)**: Sub-Millisekunden-Abfragen (`mode=ro` + `PRAGMA query_only = ON`) inklusive `EXPLAIN QUERY PLAN` B-Tree-Inspektion und Unterstuetzung fuer Generated Columns (`schieflast_strom_a`).
+   - **Statischer GitHub-Pages-Fallback (`STATIC WASM`)**: Wird kein Python-Backend erkannt (oder via `?mode=wasm`), laedt das Frontend `voltbase.db` (`96 KB`) automatisch per WebAssembly (`sql.js`) in den Browser-RAM — alle SQL-Queries, Invariant-Gates und Zeitreihen laufen damit auch komplett serverlos auf GitHub Pages (`.github/workflows/pages.yml`).
+   - Mehrstufige Read-Only-Sandbox blockiert destruktive Operationen (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `ATTACH`, `PRAGMA ... =`) in beiden Laufzeitmodi identisch.
 
 ---
 

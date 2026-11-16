@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VOLTGRID // 3-Phase Fortescue &amp; DIN VDE Invariant Studio</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="description" content="Cyber-physikalisches Modellierungs- und Verifikationssystem fuer Drehstrom-Verteilernetze mit Fortescue-Zerlegung, Zeitreihen-Schieflastanalyse und deterministischem DIN-VDE-Pruefstand." />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="VOLTGRID // 3-Phase Fortescue &amp; DIN VDE Invariant Studio" />
@@ -122,11 +122,11 @@
             <div class="flex items-center space-x-3 text-xs font-mono-tech">
                 <div class="hidden md:flex items-center space-x-2 px-2.5 py-1 border border-[var(--border-hairline)] bg-[var(--bg-secondary)] rounded text-[11px]">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span class="text-[var(--text-secondary)]">WAL INGEST: &lt; 0.5 ms</span>
+                    <span id="engine-latency-label" class="text-[var(--text-secondary)]">WAL INGEST: &lt; 0.5 ms</span>
                 </div>
                 <div class="flex items-center space-x-1.5 px-2.5 py-1 border border-[var(--border-hairline)] bg-[var(--bg-secondary)] rounded text-[11px]">
                     <span class="text-[var(--text-muted)]">MODUS:</span>
-                    <span class="text-[var(--text-primary)] font-bold">READ-ONLY WAL</span>
+                    <span id="engine-mode-label" class="text-[var(--text-primary)] font-bold">READ-ONLY WAL</span>
                 </div>
                 <button id="theme-toggle-btn" class="px-2.5 py-1 rounded border border-[var(--border-hairline)] hover:border-[var(--text-primary)] text-[11px] font-mono-tech text-[var(--text-primary)] transition-all flex items-center gap-1.5 bg-[var(--bg-card)] cursor-pointer">
                     <span id="theme-text">[DARK]</span>
@@ -390,6 +390,6 @@
         VOLTGRID CYBER-PHYSICAL SUITE // FORTESCUE DECOMPOSITION &amp; DIN VDE 0701-0702 WAL STUDIO
     </footer>
 
-    <script src="app.js?v=20261116_1"></script>
+    <script src="./app.js?v=20261116_2"></script>
 </body>
 </html>

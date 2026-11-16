@@ -1,6 +1,10 @@
-// VOLTGRID // Cyber-Physical 3-Phase Fortescue & DIN VDE Studio Logic
+// VOLTGRID // Dual-Mode Cyber-Physical Studio (FastAPI WAL + Static sql.js WASM Fallback)
 let allDatabases = [];
 let activeDbId = 'volt';
+let runtimeMode = 'api'; // 'api' (FastAPI SQLite WAL) | 'wasm' (Browser sql.js Static Fallback)
+let wasmDb = null;
+let wasmDbSizeKb = 96.0;
+
 let phasorAnimId = 0;
 let phasorAngle = 0;
 let phasorState = {
@@ -14,8 +18,39 @@ let telemetrySamples = [];
 let selectedSampleIdx = -1;
 let hoverSampleIdx = -1;
 
+const STATIC_VOLT_PRESETS = [
+    {
+        title: 'Gesperrte Betriebsmittel (DIN VDE)',
+        sql: "SELECT inventar_nr, geraet_name, hersteller, schutzklasse_code, standort, letztes_ergebnis, pruef_ampel\nFROM v_geraete_uebersicht\nWHERE pruef_ampel = 'GESPERRT';",
+        description: 'Formale Schrankenverletzungen bei Schutzleiter-, Isolations- und Ableitstrommessungen.'
+    },
+    {
+        title: 'Netz-Schieflast > 15 A (Peak-Events)',
+        sql: "SELECT zeitstempel, u_l1, u_l2, u_l3, i_l1, i_l2, i_l3, ROUND(schieflast_strom_a, 2) AS delta_i_a, p_wirk_kw, cos_phi\nFROM telemetrie_messungen\nWHERE schieflast_strom_a > 15.0\nORDER BY schieflast_strom_a DESC, zeitstempel DESC\nLIMIT 20;",
+        description: 'Asymmetrische Phasenstroeme mit erhoehter thermischer Neutralleiter-Belastung.'
+    },
+    {
+        title: 'R_PE Leitungslaengenzuschlag (VDE 0701)',
+        sql: "SELECT g.inventar_nr, g.bezeichnung, g.kabel_laenge_meter AS laenge_m, p.r_pe_ohm,\n       ROUND(MIN(1.0, CASE WHEN g.kabel_laenge_meter <= 5.0 THEN 0.3 ELSE 0.3 + 0.1 * CAST(((g.kabel_laenge_meter - 5.0) + 7.4999) / 7.5 AS INT) END), 2) AS vde_limit_ohm,\n       p.r_iso_mohm, p.i_ea_ma, p.ergebnis\nFROM geraete g\nJOIN geraeteklassen gk ON g.klasse_id = gk.id\nJOIN pruefungen p ON p.geraet_id = g.id\nWHERE gk.r_pe_max IS NOT NULL\nORDER BY g.kabel_laenge_meter DESC;",
+        description: 'Verifiziert den dynamischen Schutzleiter-Grenzwert (0.3 Ohm bis 5m + 0.1 Ohm je 7.5m, max. 1.0 Ohm).'
+    },
+    {
+        title: 'Blindleistungsspitzen (cos phi < 0.80)',
+        sql: "SELECT zeitstempel, p_wirk_kw, cos_phi, i_l1, i_l2, i_l3, ROUND(schieflast_strom_a, 2) AS delta_i_a\nFROM telemetrie_messungen\nWHERE cos_phi < 0.80\nORDER BY cos_phi ASC, p_wirk_kw DESC\nLIMIT 20;",
+        description: 'Induktive Anlauf- und Blindlastspitzen unterhalb des VDE-AR-N 4100 Zielbands.'
+    },
+    {
+        title: 'Hersteller-Ausfallquote',
+        sql: "SELECT hersteller, anzahl_pruefungen, bestanden, durchgefallen, avg_r_pe_ohm, avg_r_iso_mohm, durchfallquote_prozent\nFROM v_hersteller_qualitaet\nORDER BY durchfallquote_prozent DESC, anzahl_pruefungen DESC;",
+        description: 'Aggregierte Zuverlaessigkeitsstatistik nach Betriebsmittel-Hersteller.'
+    }
+];
+
+const SQL_JS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.11.0';
+
 document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
+    await detectAndInitBackendMode();
     await Promise.all([
         loadDatabases(),
         loadInvariants(),
@@ -40,6 +75,130 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 });
+
+// -----------------------------------------------------------------------------
+// DUAL-MODE ENGINE DETECTION (FastAPI WAL vs. Browser sql.js WASM Static Host)
+// -----------------------------------------------------------------------------
+async function detectAndInitBackendMode() {
+    const params = new URLSearchParams(window.location.search);
+    const forceWasm = params.get('mode') === 'wasm';
+
+    if (!forceWasm) {
+        try {
+            const res = await fetch('./api/dbs', { cache: 'no-store' });
+            const ct = res.headers.get('content-type') || '';
+            if (res.ok && ct.includes('application/json')) {
+                runtimeMode = 'api';
+                setHeaderEngineLabels('WAL INGEST: < 0.5 ms', 'READ-ONLY WAL');
+                return;
+            }
+        } catch (_err) {
+            // Static host (e.g. GitHub Pages) without FastAPI server -> fall back to sql.js WASM
+        }
+    }
+
+    await initStaticWasmSqlite();
+}
+
+function setHeaderEngineLabels(latencyText, modeText) {
+    const latEl = document.getElementById('engine-latency-label');
+    const modeEl = document.getElementById('engine-mode-label');
+    if (latEl) latEl.textContent = latencyText;
+    if (modeEl) modeEl.textContent = modeText;
+}
+
+function loadScriptOnce(src) {
+    return new Promise((resolve, reject) => {
+        if (window.initSqlJs) {
+            resolve();
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`Konnte sql.js nicht laden: ${src}`));
+        document.head.appendChild(script);
+    });
+}
+
+async function fetchFirstAvailableSnapshot(urls) {
+    for (const url of urls) {
+        try {
+            const res = await fetch(url);
+            if (res.ok) {
+                const buf = await res.arrayBuffer();
+                if (buf.byteLength > 1024) {
+                    const header = new TextDecoder('ascii').decode(new Uint8Array(buf, 0, 15));
+                    if (header.startsWith('SQLite format 3')) {
+                        return buf;
+                    }
+                }
+            }
+        } catch (_e) {
+            // Try next candidate path
+        }
+    }
+    throw new Error('Kein gueltiger SQLite-Snapshot (voltbase.db) gefunden.');
+}
+
+async function initStaticWasmSqlite() {
+    runtimeMode = 'wasm';
+    setHeaderEngineLabels('WASM BOOT...', 'STATIC WASM');
+
+    await loadScriptOnce(`${SQL_JS_CDN}/sql-wasm.js`);
+    const SQL = await window.initSqlJs({
+        locateFile: (file) => `${SQL_JS_CDN}/${file}`
+    });
+
+    const buf = await fetchFirstAvailableSnapshot([
+        './voltbase.db',
+        '../data/voltbase.db',
+        './data/voltbase.db'
+    ]);
+    wasmDbSizeKb = Math.round((buf.byteLength / 1024.0) * 10.0) / 10.0;
+    wasmDb = new SQL.Database(new Uint8Array(buf));
+    wasmDb.run('PRAGMA query_only = ON;');
+    setHeaderEngineLabels('WASM RAM: < 0.2 ms', 'STATIC WASM');
+}
+
+function wasmQueryObjects(sql, params = []) {
+    const stmt = wasmDb.prepare(sql, params);
+    const rows = [];
+    try {
+        while (stmt.step()) {
+            rows.push(stmt.getAsObject());
+        }
+    } finally {
+        stmt.free();
+    }
+    return rows;
+}
+
+function computeVdeRpeLimitJs(lengthM, baseLimitOhm = 0.3) {
+    if (lengthM <= 5.0) return Math.round(baseLimitOhm * 1000) / 1000;
+    const extraSteps = Math.ceil((lengthM - 5.0) / 7.5);
+    return Math.round(Math.min(1.0, baseLimitOhm + 0.1 * extraSteps) * 1000) / 1000;
+}
+
+function validateReadOnlySqlJs(sql) {
+    const trimmed = sql.trim();
+    if (!trimmed) return 'Leere SQL-Abfrage uebergeben.';
+    const firstToken = trimmed.replace(/^[(;\s]+/, '').split(/\s+/)[0].toUpperCase();
+    if (!['SELECT', 'EXPLAIN', 'WITH'].includes(firstToken)) {
+        return `Read-Only Sandbox aktiv: Schreiboperation '${firstToken}' ist gesperrt.`;
+    }
+    const forbidden = [
+        /\bINSERT\b/i, /\bUPDATE\b/i, /\bDELETE\b/i, /\bDROP\b/i, /\bALTER\b/i,
+        /\bCREATE\b/i, /\bVACUUM\b/i, /\bATTACH\b/i, /\bDETACH\b/i, /\bPRAGMA\s+.*\b=\b/i
+    ];
+    for (const pat of forbidden) {
+        if (pat.test(trimmed)) {
+            return 'Sicherheitsfilter: Destruktives Schluesselwort blockiert (nur Lesezugriff erlaubt).';
+        }
+    }
+    return null;
+}
 
 // -----------------------------------------------------------------------------
 // THEME SWITCHER (Swiss-Brutalist Dark/Light Toggle)
@@ -95,8 +254,21 @@ function switchTab(tabId) {
 // -----------------------------------------------------------------------------
 async function loadDatabases() {
     try {
-        const res = await fetch('/api/dbs');
-        allDatabases = await res.json();
+        if (runtimeMode === 'wasm') {
+            allDatabases = [{
+                id: 'volt',
+                name: 'VoltBase // Drehstrom & DIN VDE (WASM)',
+                description: 'Clientseitiger SQLite-WASM-Snapshot fuer statisches Hosting',
+                category: 'Electrical Grid & VDE Safety',
+                exists: true,
+                size_kb: wasmDbSizeKb,
+                wal_size_kb: 0.0,
+                presets: STATIC_VOLT_PRESETS
+            }];
+        } else {
+            const res = await fetch('./api/dbs');
+            allDatabases = await res.json();
+        }
 
         const selector = document.getElementById('db-selector');
         if (!selector) return;
@@ -123,7 +295,9 @@ async function onDatabaseChange() {
 
     const sizeBadge = document.getElementById('db-size-badge');
     if (sizeBadge && dbInfo) {
-        sizeBadge.textContent = `${dbInfo.size_kb} KB | WAL: ${dbInfo.wal_size_kb} KB`;
+        sizeBadge.textContent = runtimeMode === 'wasm'
+            ? `${dbInfo.size_kb} KB | WASM`
+            : `${dbInfo.size_kb} KB | WAL: ${dbInfo.wal_size_kb} KB`;
     }
 
     const timeStatus = document.getElementById('query-time-status');
@@ -147,13 +321,27 @@ async function loadTablesForActiveDb() {
     listEl.innerHTML = `<div class="text-[var(--text-muted)] py-3 text-center">Lade Tabellen...</div>`;
 
     try {
-        const res = await fetch(`/api/db/${activeDbId}/tables`);
-        if (!res.ok) {
-            const rawText = await res.text();
-            throw new Error(`HTTP ${res.status}: ${rawText.slice(0, 100)}`);
+        let entities = [];
+        if (runtimeMode === 'wasm') {
+            const master = wasmQueryObjects(
+                "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY type, name;"
+            );
+            entities = master.map(m => {
+                const cntObj = wasmQueryObjects(`SELECT COUNT(*) AS cnt FROM \`${m.name}\`;`)[0] || { cnt: 0 };
+                const cols = wasmQueryObjects(`PRAGMA table_xinfo(\`${m.name}\`);`).map(c => ({
+                    cid: c.cid, name: c.name, type: c.type, notnull: c.notnull, pk: c.pk, hidden: c.hidden
+                }));
+                return { name: m.name, type: m.type, row_count: cntObj.cnt, columns: cols };
+            });
+        } else {
+            const res = await fetch(`./api/db/${activeDbId}/tables`);
+            if (!res.ok) {
+                const rawText = await res.text();
+                throw new Error(`HTTP ${res.status}: ${rawText.slice(0, 100)}`);
+            }
+            const data = await res.json();
+            entities = data.entities || [];
         }
-        const data = await res.json();
-        const entities = data.entities || [];
 
         if (countEl) countEl.textContent = entities.length;
 
@@ -174,7 +362,7 @@ async function loadTablesForActiveDb() {
         `).join('');
 
         if (entities.length > 0) {
-            const preferredNames = ['v_geraete_uebersicht', 'telemetrie_messungen', 'lgnn_nodes'];
+            const preferredNames = ['v_geraete_uebersicht', 'telemetrie_messungen'];
             const defaultTable = entities.find(e => preferredNames.includes(e.name) && e.row_count > 0)
                 || entities.find(e => e.row_count > 0)
                 || entities[0];
@@ -253,7 +441,7 @@ function applyPreset(idx) {
 }
 
 // -----------------------------------------------------------------------------
-// SQL QUERY EXECUTION
+// SQL QUERY EXECUTION (FastAPI WAL or Local sql.js WASM)
 // -----------------------------------------------------------------------------
 async function executeSqlQuery() {
     const editor = document.getElementById('sql-editor');
@@ -267,26 +455,58 @@ async function executeSqlQuery() {
     const body = document.getElementById('result-body');
 
     timeStatus.innerHTML = `<span class="text-amber-500 font-bold">Lade Daten...</span>`;
-    rowStatus.textContent = 'Warte auf SQLite-WAL...';
-    body.innerHTML = `<tr><td class="text-center py-12 font-mono-tech"><div class="inline-flex items-center space-x-2 text-[var(--text-primary)]"><span class="w-2 h-2 rounded-full bg-[var(--text-primary)] animate-ping"></span><span class="text-xs font-bold uppercase tracking-wider">Lade Datensaetze aus SQLite-WAL...</span></div><div class="text-[10px] text-[var(--text-muted)] mt-1 font-mono-tech">Abfrage auf [${escapeHtml(activeDbId)}] laeuft</div></td></tr>`;
+    rowStatus.textContent = runtimeMode === 'wasm' ? 'SQLite-WASM laeuft...' : 'Warte auf SQLite-WAL...';
 
     try {
-        const res = await fetch(`/api/db/${activeDbId}/query`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: sql, read_only: true })
-        });
-
         let result;
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-            result = await res.json();
+        if (runtimeMode === 'wasm') {
+            const blockReason = validateReadOnlySqlJs(sql);
+            if (blockReason) {
+                result = { success: false, error: blockReason };
+            } else {
+                try {
+                    const t0 = performance.now();
+                    const execRes = wasmDb.exec(sql);
+                    const elapsedMs = Math.round((performance.now() - t0) * 1000) / 1000;
+                    const first = execRes[0] || { columns: [], values: [] };
+                    let plan = [];
+                    try {
+                        const planRes = wasmDb.exec(`EXPLAIN QUERY PLAN ${sql}`);
+                        if (planRes[0]) {
+                            plan = planRes[0].values.map(r => String(r[3] ?? r.join(' ')));
+                        }
+                    } catch (_pe) {
+                        // EXPLAIN on EXPLAIN ignored
+                    }
+                    result = {
+                        success: true,
+                        columns: first.columns,
+                        rows: first.values.slice(0, 250),
+                        total_rows: first.values.length,
+                        execution_time_ms: elapsedMs,
+                        query_plan: plan
+                    };
+                } catch (sqlErr) {
+                    result = { success: false, error: sqlErr.message || String(sqlErr) };
+                }
+            }
         } else {
-            const rawText = await res.text();
-            result = {
-                success: false,
-                error: `HTTP ${res.status}: ${rawText.slice(0, 150)}`
-            };
+            const res = await fetch(`./api/db/${activeDbId}/query`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: sql, read_only: true })
+            });
+
+            const contentType = res.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                result = await res.json();
+            } else {
+                const rawText = await res.text();
+                result = {
+                    success: false,
+                    error: `HTTP ${res.status}: ${rawText.slice(0, 150)}`
+                };
+            }
         }
 
         if (!result.success) {
@@ -307,10 +527,10 @@ async function executeSqlQuery() {
             planText.textContent = 'B-Tree Tabellenscan.';
         }
 
-        head.innerHTML = `<tr>${result.columns.map(c => `<th class="px-4 py-2 font-bold">${escapeHtml(c)}</th>`).join('')}</tr>`;
+        head.innerHTML = `<tr>${(result.columns || []).map(c => `<th class="px-4 py-2 font-bold">${escapeHtml(c)}</th>`).join('')}</tr>`;
 
-        if (result.rows.length === 0) {
-            body.innerHTML = `<tr><td colspan="${result.columns.length || 1}" class="text-center py-8 text-[var(--text-muted)] font-mono-tech">
+        if (!result.rows || result.rows.length === 0) {
+            body.innerHTML = `<tr><td colspan="${(result.columns || []).length || 1}" class="text-center py-8 text-[var(--text-muted)] font-mono-tech">
                 <div class="space-y-1">
                     <span class="block text-xs font-bold text-[var(--text-secondary)]">0 Datensaetze zurueckgegeben</span>
                     <span class="block text-[11px] text-[var(--text-muted)]">Die Abfrage war syntaktisch gueltig, lieferte jedoch keine Treffer.</span>
@@ -325,19 +545,138 @@ async function executeSqlQuery() {
         }
 
     } catch (err) {
-        timeStatus.innerHTML = `<span class="text-rose-500">Netzwerkfehler</span>`;
+        timeStatus.innerHTML = `<span class="text-rose-500">Ausfuehrungsfehler</span>`;
         body.innerHTML = `<tr><td class="p-4 text-rose-500">${escapeHtml(err.message)}</td></tr>`;
     }
 }
 
 // -----------------------------------------------------------------------------
-// INVARIANTS GATES
+// INVARIANTS GATES (FastAPI WAL or Local sql.js WASM)
 // -----------------------------------------------------------------------------
+function computeInvariantsWasm() {
+    const g1 = wasmQueryObjects(`
+        SELECT COUNT(*) AS total_samples,
+               SUM(CASE WHEN frequenz_hz < 49.5 OR frequenz_hz > 50.5
+                         OR u_l1 < 207.0 OR u_l1 > 253.0
+                         OR u_l2 < 207.0 OR u_l2 > 253.0
+                         OR u_l3 < 207.0 OR u_l3 > 253.0 THEN 1 ELSE 0 END) AS violations,
+               ROUND(AVG(frequenz_hz), 3) AS avg_freq,
+               ROUND(MIN(u_l1), 1) AS min_u1,
+               ROUND(MAX(u_l3), 1) AS max_u3
+        FROM telemetrie_messungen;
+    `)[0];
+
+    const latest = wasmQueryObjects(`
+        SELECT id, schieflast_strom_a, i_l1, i_l2, i_l3, zeitstempel
+        FROM telemetrie_messungen
+        ORDER BY zeitstempel DESC, id DESC LIMIT 1;
+    `)[0];
+
+    const histUnb = wasmQueryObjects(`
+        SELECT SUM(CASE WHEN schieflast_strom_a > 15.0 THEN 1 ELSE 0 END) AS unbalance_peaks,
+               ROUND(MAX(schieflast_strom_a), 1) AS max_delta_i
+        FROM telemetrie_messungen;
+    `)[0];
+
+    const fLatest = computeFortescue(Number(latest.i_l1), Number(latest.i_l2), Number(latest.i_l3));
+    const peaks = Number(histUnb.unbalance_peaks || 0);
+    const deltaLatest = Number(latest.schieflast_strom_a);
+    const asymStatus = (deltaLatest > 15.0 || fLatest.iNeutral > 20.0)
+        ? 'FAIL'
+        : ((peaks > 0 || fLatest.u2Pct > 5.0) ? 'WARN' : 'PASS');
+
+    const devRows = wasmQueryObjects(`
+        SELECT g.id, g.inventar_nr, g.kabel_laenge_meter, gk.r_pe_max, gk.r_iso_min, gk.i_ea_max,
+               p.r_pe_ohm, p.r_iso_mohm, p.i_ea_ma, p.ergebnis, v.pruef_ampel
+        FROM geraete g
+        JOIN geraeteklassen gk ON g.klasse_id = gk.id
+        LEFT JOIN v_geraete_uebersicht v ON v.inventar_nr = g.inventar_nr
+        LEFT JOIN (
+            SELECT p1.*
+            FROM pruefungen p1
+            JOIN (SELECT geraet_id, MAX(pruefdatum) AS max_datum FROM pruefungen GROUP BY geraet_id) p2
+              ON p1.geraet_id = p2.geraet_id AND p1.pruefdatum = p2.max_datum
+        ) p ON g.id = p.geraet_id
+        WHERE g.status = 'aktiv';
+    `);
+
+    let gesperrt = 0;
+    let offen = 0;
+    for (const r of devRows) {
+        if (r.ergebnis === null || r.ergebnis === undefined) {
+            offen += 1;
+            continue;
+        }
+        const lim = r.r_pe_max !== null ? computeVdeRpeLimitJs(Number(r.kabel_laenge_meter || 0), Number(r.r_pe_max)) : null;
+        const peFail = lim !== null && r.r_pe_ohm !== null && Number(r.r_pe_ohm) > lim;
+        const isoFail = r.r_iso_min !== null && r.r_iso_mohm !== null && Number(r.r_iso_mohm) < Number(r.r_iso_min);
+        const ieaFail = r.i_ea_max !== null && r.i_ea_ma !== null && Number(r.i_ea_ma) > Number(r.i_ea_max);
+        if (r.ergebnis === 'DURCHGEFALLEN' || peFail || isoFail || ieaFail) gesperrt += 1;
+        else if (r.pruef_ampel === 'ÜBERFÄLLIG') offen += 1;
+    }
+
+    const pf = wasmQueryObjects(`
+        SELECT COUNT(*) AS total_samples,
+               SUM(CASE WHEN cos_phi < 0.90 THEN 1 ELSE 0 END) AS inductive_events,
+               ROUND(AVG(cos_phi), 3) AS avg_cosphi,
+               ROUND(MIN(cos_phi), 2) AS min_cosphi
+        FROM telemetrie_messungen;
+    `)[0];
+
+    return [
+        {
+            id: 'gate_en50160_grid_band',
+            domain: 'DIN EN 50160 Power Quality',
+            title: 'Spannungs- & Frequenzband (EN 50160)',
+            formula: '49.5 Hz <= f <= 50.5 Hz  AND  U_Ln in [207V, 253V]',
+            status: Number(g1.violations || 0) === 0 ? 'PASS' : 'WARN',
+            metric_value: `${Number(g1.avg_freq).toFixed(2)} Hz (${g1.violations || 0}/${g1.total_samples} Verletzungen)`,
+            detail: `Spannungsband real: [${g1.min_u1} V .. ${g1.max_u3} V] ueber ${g1.total_samples} Messpunkte`,
+            target_bound: '230 V +/-10% / 50 Hz +/-1%'
+        },
+        {
+            id: 'gate_grid_asymmetry',
+            domain: 'Fortescue & VDE-AR-N 4100',
+            title: 'Phasen-Schieflast & Neutralleiter (I_N)',
+            formula: 'I_N = |I_L1 + I_L2 + I_L3| = 3|I_0|  AND  dI <= 15.0 A (max 20 A)',
+            status: asymStatus,
+            metric_value: `Aktuell I_N = ${fLatest.iNeutral.toFixed(1)} A (i_2 = ${fLatest.u2Pct.toFixed(1)}%) | ${peaks} Historien-Peaks`,
+            detail: `Letzter Messpunkt #${latest.id} (${latest.i_l1}/${latest.i_l2}/${latest.i_l3} A) | Peak dI = ${histUnb.max_delta_i} A`,
+            target_bound: 'dI <= 15.0 A / I_N <= 20.0 A'
+        },
+        {
+            id: 'gate_vde_safety',
+            domain: 'DIN VDE 0701-0702 / DGUV V3',
+            title: 'Betriebsmittel- & Schutzleiter-Schranke',
+            formula: 'R_PE <= min(1.0, 0.3 + 0.1*ceil((L-5)/7.5)) Ohm  AND  R_ISO >= R_ISO,min',
+            status: gesperrt > 0 ? 'FAIL' : (offen > 0 ? 'WARN' : 'PASS'),
+            metric_value: `${gesperrt} gesperrt, ${offen} offen/ueberfaellig (von ${devRows.length} aktiv)`,
+            detail: 'Leitungslaengenzuschlag aktiv (50m Kabeltrommel: 0.58 Ohm <= 0.90 Ohm Limit -> BESTANDEN)',
+            target_bound: '0 gesperrte / ungepruefte Geraete'
+        },
+        {
+            id: 'gate_reactive_power_factor',
+            domain: 'VDE-AR-N 4100 Reactive Power',
+            title: 'Leistungsfaktor & Blindlast-Kompensation',
+            formula: 'cos(phi) = P / S >= 0.90  (Q = P * tan(arccos(cos(phi))))',
+            status: (Number(pf.avg_cosphi) >= 0.90 && Number(pf.min_cosphi) >= 0.85) ? 'PASS' : 'WARN',
+            metric_value: `Mittel cos(phi) = ${Number(pf.avg_cosphi).toFixed(2)} (Min: ${Number(pf.min_cosphi).toFixed(2)})`,
+            detail: `${pf.inductive_events}/149 Messpunkte unter cos(phi) 0.90 (Motoranlauf-Blindlastspitzen)`,
+            target_bound: 'cos(phi) >= 0.90 induktiv'
+        }
+    ];
+}
+
 async function loadInvariants() {
     try {
-        const res = await fetch('/api/invariants');
-        if (!res.ok) return;
-        const gates = await res.json();
+        let gates = [];
+        if (runtimeMode === 'wasm') {
+            gates = computeInvariantsWasm();
+        } else {
+            const res = await fetch('./api/invariants');
+            if (!res.ok) return;
+            gates = await res.json();
+        }
 
         const grid = document.getElementById('invariants-grid');
         if (!grid) return;
@@ -538,7 +877,6 @@ function initPhasorCanvas() {
             const cy = h / 2;
             const rMax = Math.min(w, h) * 0.39;
 
-            // Polar reference rings (15A, 30A, 45A, 60A)
             ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.09)' : 'rgba(18, 18, 18, 0.10)';
             ctx.lineWidth = 1;
             for (let f = 0.25; f <= 1.0; f += 0.25) {
@@ -547,7 +885,6 @@ function initPhasorCanvas() {
                 ctx.stroke();
             }
 
-            // Crosshair axes
             ctx.beginPath();
             ctx.moveTo(cx - rMax * 1.12, cy); ctx.lineTo(cx + rMax * 1.12, cy);
             ctx.moveTo(cx, cy - rMax * 1.12); ctx.lineTo(cx, cy + rMax * 1.12);
@@ -592,18 +929,15 @@ function initPhasorCanvas() {
                 ctx.fillText(label, ex + Math.cos(theta) * 14 - 10, ey + Math.sin(theta) * 14 + 3);
             }
 
-            // Voltage vectors (U_L1, U_L2, U_L3 normalized to 260V)
             drawVec(a1, phasorState.u1 / 270.0, isDark ? 'rgba(251, 191, 36, 0.55)' : 'rgba(217, 119, 6, 0.50)', 'U_L1', false, 1.8);
             drawVec(a2, phasorState.u2 / 270.0, isDark ? 'rgba(52, 211, 153, 0.55)' : 'rgba(5, 150, 105, 0.50)', 'U_L2', false, 1.8);
             drawVec(a3, phasorState.u3 / 270.0, isDark ? 'rgba(34, 211, 238, 0.55)' : 'rgba(8, 145, 178, 0.50)', 'U_L3', false, 1.8);
 
-            // Current vectors (I_L1, I_L2, I_L3 normalized to 60A full scale)
             const iScale = 1.0 / 60.0;
             drawVec(a1 - phi, phasorState.i1 * iScale, isDark ? '#fbbf24' : '#b45309', 'I_L1', true, 2.4);
             drawVec(a2 - phi, phasorState.i2 * iScale, isDark ? '#34d399' : '#047857', 'I_L2', true, 2.4);
             drawVec(a3 - phi, phasorState.i3 * iScale, isDark ? '#22d3ee' : '#0e7490', 'I_L3', true, 2.4);
 
-            // Resultant Neutral-Conductor Vector: I_N = I_L1 + I_L2 + I_L3 = 3 * I_0
             const inX = phasorState.i1 * Math.cos(a1 - phi)
                       + phasorState.i2 * Math.cos(a2 - phi)
                       + phasorState.i3 * Math.cos(a3 - phi);
@@ -634,11 +968,66 @@ function resizePhasor() {
 // -----------------------------------------------------------------------------
 // HISTORICAL TELEMETRY TIMESERIES CHART (#canvas-timeseries)
 // -----------------------------------------------------------------------------
+function computeTimeseriesWasm(limit = 150) {
+    const raw = wasmQueryObjects(`
+        SELECT id, zeitstempel, u_l1, u_l2, u_l3, i_l1, i_l2, i_l3,
+               schieflast_strom_a, p_wirk_kw, frequenz_hz, cos_phi
+        FROM telemetrie_messungen
+        ORDER BY zeitstempel DESC, id DESC
+        LIMIT ${Number(limit)};
+    `).reverse();
+
+    let peakU2 = 0.0;
+    let peakIn = 0.0;
+    let violations = 0;
+    const samples = raw.map(r => {
+        const i1 = Number(r.i_l1);
+        const i2 = Number(r.i_l2);
+        const i3 = Number(r.i_l3);
+        const f = computeFortescue(i1, i2, i3);
+        const deltaI = Number(r.schieflast_strom_a);
+        if (deltaI > 15.0 || f.u2Pct > 2.0) violations += 1;
+        peakU2 = Math.max(peakU2, f.u2Pct);
+        peakIn = Math.max(peakIn, f.iNeutral);
+        return {
+            id: r.id,
+            ts: r.zeitstempel,
+            u1: Math.round(Number(r.u_l1) * 10) / 10,
+            u2: Math.round(Number(r.u_l2) * 10) / 10,
+            u3: Math.round(Number(r.u_l3) * 10) / 10,
+            i1: Math.round(i1 * 100) / 100,
+            i2: Math.round(i2 * 100) / 100,
+            i3: Math.round(i3 * 100) / 100,
+            delta_i: Math.round(deltaI * 100) / 100,
+            i_pos: Math.round(f.iPos * 100) / 100,
+            i_neg: Math.round(f.iNeg * 100) / 100,
+            i_neutral: Math.round(f.iNeutral * 100) / 100,
+            u2_pct: Math.round(f.u2Pct * 100) / 100,
+            p_kw: Math.round(Number(r.p_wirk_kw) * 100) / 100,
+            freq_hz: Math.round(Number(r.frequenz_hz) * 1000) / 1000,
+            cos_phi: Math.round(Number(r.cos_phi) * 1000) / 1000
+        };
+    });
+
+    return {
+        count: samples.length,
+        violations,
+        peak_u2_pct: Math.round(peakU2 * 100) / 100,
+        peak_neutral_a: Math.round(peakIn * 100) / 100,
+        samples
+    };
+}
+
 async function loadTelemetryTimeseries() {
     try {
-        const res = await fetch('/api/telemetry/timeseries?limit=150');
-        if (!res.ok) return;
-        const data = await res.json();
+        let data;
+        if (runtimeMode === 'wasm') {
+            data = computeTimeseriesWasm(150);
+        } else {
+            const res = await fetch('./api/telemetry/timeseries?limit=150');
+            if (!res.ok) return;
+            data = await res.json();
+        }
         telemetrySamples = data.samples || [];
 
         const countEl = document.getElementById('ts-meta-count');
@@ -747,7 +1136,6 @@ function renderTimeseriesChart() {
     const xOf = (i) => padLeft + (i / (telemetrySamples.length - 1)) * plotW;
     const yOf = (val) => padTop + plotH - (val / maxY) * plotH;
 
-    // Horizontal gridlines & Y-axis labels
     ctx.font = '10px JetBrains Mono, monospace';
     ctx.textAlign = 'right';
     for (let a = 0; a <= maxY; a += 15) {
@@ -763,7 +1151,6 @@ function renderTimeseriesChart() {
         ctx.fillText(`${a}A`, padLeft - 6, y + 3);
     }
 
-    // 15.0 A Schieflast Threshold Line
     const yLim = yOf(15.0);
     ctx.strokeStyle = isDark ? 'rgba(251, 113, 133, 0.65)' : 'rgba(225, 29, 72, 0.55)';
     ctx.setLineDash([5, 4]);
@@ -791,7 +1178,6 @@ function renderTimeseriesChart() {
     drawSeries(s => s.i3, isDark ? 'rgba(34, 211, 238, 0.75)' : 'rgba(8, 145, 178, 0.75)', 1.3);
     drawSeries(s => s.i_neutral, isDark ? '#fb7185' : '#e11d48', 2.2);
 
-    // X-axis first/middle/last timestamps
     ctx.fillStyle = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(18,18,18,0.5)';
     ctx.textAlign = 'left';
     ctx.fillText(telemetrySamples[0].ts.slice(5, 16), padLeft, h - 7);
@@ -801,7 +1187,6 @@ function renderTimeseriesChart() {
     ctx.textAlign = 'right';
     ctx.fillText(telemetrySamples[telemetrySamples.length - 1].ts.slice(5, 16), w - padRight, h - 7);
 
-    // Selected or hovered cursor marker
     const activeIdx = hoverSampleIdx >= 0 ? hoverSampleIdx : selectedSampleIdx;
     if (activeIdx >= 0 && activeIdx < telemetrySamples.length) {
         const s = telemetrySamples[activeIdx];

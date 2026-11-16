@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -270,6 +271,15 @@ def get_telemetry_timeseries(limit: int = Query(150, ge=10, le=500)):
         }
     finally:
         conn.close()
+
+
+@app.get("/voltbase.db")
+def download_readonly_voltbase_snapshot():
+    """Stellt den schreibgeschuetzten SQLite-Snapshot fuer den clientseitigen sql.js-WASM-Fallback bereit."""
+    db_path = Path(DATABASE_REGISTRY["volt"]["path"])
+    if not db_path.exists():
+        raise HTTPException(status_code=404, detail="voltbase.db nicht gefunden.")
+    return FileResponse(str(db_path), media_type="application/x-sqlite3", filename="voltbase.db")
 
 
 if FRONTEND_DIR.exists():
