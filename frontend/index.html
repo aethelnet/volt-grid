@@ -12,10 +12,7 @@
     <meta property="og:description" content="Cyber-physical modeling and formal DIN VDE 0701-0702 / DIN EN 50160 verification engine for three-phase power distribution networks." />
     <link rel="canonical" href="https://volt.aethelburg.network/" />
 
-    <!-- Dutch & Swiss Typography Stack: Space Grotesk + Newsreader + JetBrains Mono -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Newsreader:ital,opsz,wght@1,6..72,300;1,6..72,400;1,6..72,600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Local System Typography Stack (Zero external Google Fonts / Zero Tracking) -->
 
     <!-- TailwindCSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -390,7 +387,20 @@
     <!-- FOOTER -->
     <footer class="border-t border-[var(--border-hairline)] py-3 px-6 text-center text-[10px] font-mono-tech text-[var(--text-muted)] bg-[var(--bg-primary)]">
         VOLTGRID CYBER-PHYSICAL SUITE // FORTESCUE DECOMPOSITION &amp; DIN VDE 0701-0702 WAL STUDIO
+        &nbsp;·&nbsp;
+        <button onclick="document.getElementById('volt-legal-modal').style.display='flex'" class="underline hover:text-[var(--text-primary)] cursor-pointer">IMPRESSUM &amp; DATENSCHUTZ (§ 5 DDG)</button>
     </footer>
+
+    <div id="volt-legal-modal" onclick="if(event.target===this)this.style.display='none'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center;padding:16px;font-family:ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;font-size:12px;line-height:1.55;color:#111827;">
+      <div style="background:#ffffff;border:2px solid #111827;box-shadow:6px 6px 0 #111827;max-width:580px;width:100%;padding:20px;text-align:left;">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #111827;padding-bottom:10px;margin-bottom:12px;">
+          <strong>IMPRESSUM &amp; DATENSCHUTZ (§ 5 DDG / DSGVO)</strong>
+          <button onclick="document.getElementById('volt-legal-modal').style.display='none'" style="background:#ffffff;color:#111827;border:1px solid #111827;padding:2px 8px;cursor:pointer;font-family:inherit;">[X]</button>
+        </div>
+        <p style="margin:0 0 12px 0;"><strong>1. Angaben gemäß § 5 DDG:</strong><br/>Niklas Herlyn — VoltGrid / Auratic Systems<br/>Taunusblick 10, 61191 Rosbach v. d. Höhe, Deutschland<br/>E-Mail: nika.hrlyn@gmail.com<br/>Verantwortlich i.S.d. § 18 Abs. 2 MStV: Niklas Herlyn (Anschrift wie oben)</p>
+        <p style="margin:0;"><strong>2. Datenschutzerklärung (DSGVO):</strong><br/>Diese Demo-Anwendung verarbeitet Messdaten rein lokal im Browser (SQLite/WASM) ohne Cookies, Google Fonts oder Analyse-Tracking. Das statische Hosting erfolgt über GitHub Pages (GitHub, Inc.); für das Layout wird das Tailwind-Skript (cdn.tailwindcss.com) geladen. Dabei fallen technisch notwendige Verbindungsdaten (IP-Adresse) gemäß Art. 6 Abs. 1 lit. f DSGVO an.</p>
+      </div>
+    </div>
 
     <script src="./app.js?v=20261116_2"></script>
 </body>
